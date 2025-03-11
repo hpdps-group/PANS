@@ -26,29 +26,31 @@ void ansHistogram(
     const ANSDecodedT* in,
     uint32_t size,
     uint32_t* out) {
-    for (int i = 0; i < kNumSymbols; ++i)
-        out[i] = 0;
+    uint32_t local_hist[kNumSymbols] = {0};
     uint32_t roundUp4 = std::min(size, getAlignmentRoundUp(sizeof(uint4), in));
     auto remaining = size - roundUp4;
     auto numU4 = divDown(remaining, sizeof(uint4));
     auto inAligned = in + roundUp4;
     auto inAligned4 = (const uint4*)inAligned;
+    
     for(int i = 0; i < roundUp4; i ++){
-      out[in[i]]++;
+      local_hist[in[i]]++;
     }
     for(int i = 0; i < numU4; i ++){
       uint4 v = inAligned4[i];
       for(int j = 0; j < 4; j++){
-        out[(v.x >> (8 * j)) & 0xFF]++;
-        out[(v.y >> (8 * j)) & 0xFF]++;
-        out[(v.z >> (8 * j)) & 0xFF]++;
-        out[(v.w >> (8 * j)) & 0xFF]++;
+        local_hist[(v.x >> (8 * j)) & 0xFF]++;
+        local_hist[(v.y >> (8 * j)) & 0xFF]++;
+        local_hist[(v.z >> (8 * j)) & 0xFF]++;
+        local_hist[(v.w >> (8 * j)) & 0xFF]++;
       }
     }
     for(int i = numU4 * sizeof(uint4); i < remaining; i ++) {
-      out[inAligned[i]]++;
+      local_hist[inAligned[i]]++;
     }
+    memcpy(out, local_hist, sizeof(uint32_t) * kNumSymbols);
 }
+
 
 uint32_t clz(uint32_t x) {
     if (x == 0) return 32; 
