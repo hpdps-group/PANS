@@ -21,7 +21,6 @@
 #include "CpuANSUtils.h"
 
 namespace cpu_ans {
-
 void ansHistogram(
     const ANSDecodedT* in,
     uint32_t size,
@@ -32,7 +31,6 @@ void ansHistogram(
     auto numU4 = divDown(remaining, sizeof(uint4));
     auto inAligned = in + roundUp4;
     auto inAligned4 = (const uint4*)inAligned;
-    
     for(int i = 0; i < roundUp4; i ++){
       local_hist[in[i]]++;
     }
@@ -51,17 +49,6 @@ void ansHistogram(
     memcpy(out, local_hist, sizeof(uint32_t) * kNumSymbols);
 }
 
-
-uint32_t clz(uint32_t x) {
-    if (x == 0) return 32; 
-    uint32_t n = 0;
-    while ((x & (1U << 31)) == 0) {
-        x <<= 1;
-        ++n;
-    }
-    return n;
-}
-
 void ansCalcWeights(
     int probBits,
     uint32_t totalNum,
@@ -76,27 +63,41 @@ void ansCalcWeights(
         qProb[i] = (counts[i] > 0 && qProb[i] == 0) ? 1U : qProb[i];
         sortedPairs[i] = (qProb[i] << 16) | i;
     }
-    std::sort(sortedPairs.begin(), sortedPairs.end(), [](uint32_t a, uint32_t b) {
-        return a > b;
-    });
+    #pragma omp single
+    {
+        __gnu_parallel::sort(
+            sortedPairs.begin(), 
+            sortedPairs.end(),
+            [](uint32_t a, uint32_t b) { return a > b; },
+            __gnu_parallel::balanced_quicksort_tag()
+        );
+    }
     uint32_t tidSymbol[kNumSymbols];
     for (int i = 0; i < kNumSymbols; ++i) {
         tidSymbol[i] = sortedPairs[i] & 0xFFFFU;
         qProb[i] = sortedPairs[i] >> 16;
     }
-    int currentSum = std::accumulate(qProb.begin(), qProb.end(), 0);
+    int currentSum = 0;
+    #pragma omp parallel num_threads(32)
+    {
+        int localSum = 0;
+        #pragma omp for schedule(static)
+        for (int i = 0; i < kNumSymbols; ++i) {
+            localSum += qProb[i];
+        }
+        #pragma omp atomic
+        currentSum += localSum;
+    }
     int diff = static_cast<int>(kProbWeight) - currentSum;
     if (diff > 0) {
       int iterToApply = std::min(diff, static_cast<int>(kNumSymbols));
       for(int i = diff; i > 0; i -= iterToApply){
+        #pragma omp parallel for num_threads(32) schedule(static)
         for(int j = 0; j < kNumSymbols; ++j){
-          int cursym = tidSymbol[j];
-          if(cursym < iterToApply){
-            qProb[j] += 1;
-          }          
+            qProb[j] += (tidSymbol[j] < iterToApply);       
         }
       }
-    } 
+    }
     else if (diff < 0) {
       diff = -diff;
       while(diff > 0){
@@ -106,6 +107,7 @@ void ansCalcWeights(
         }
         int iterToApply = diff < qNumGt1s ? diff : qNumGt1s;
         int startIndex = qNumGt1s - iterToApply;
+        #pragma omp parallel for num_threads(32) schedule(static)
         for(int j = 0; j < kNumSymbols; ++j){
           if(j >= startIndex && j < qNumGt1s){
             qProb[j] -= 1;
@@ -114,22 +116,21 @@ void ansCalcWeights(
         diff -= iterToApply;
       }  
     }
-    uint32_t smemPdf[kNumSymbols];
-    for(int i = 0; i < kNumSymbols; ++i){
-      smemPdf[tidSymbol[i]] = qProb[i];
-    }
     uint32_t symPdf[kNumSymbols];
-    for (int i = 0; i < kNumSymbols; ++i) {
-        symPdf[i] = smemPdf[i];
+    #pragma omp for simd schedule(static)
+    for(int i = 0; i < kNumSymbols; i ++){
+      symPdf[tidSymbol[i]] = qProb[i];
     }
     std::vector<uint32_t> cdf(kNumSymbols, 0);
+    uint32_t pp = symPdf[0];
+    uint32_t shift0 = 32 - clz(pp - 1);
+    uint64_t magic0 = ((1ULL << 32) * ((1ULL << shift0) - pp)) / pp + 1;
+    table[0] = {pp, 0, static_cast<uint32_t>(magic0), shift0};
     for (int i = 1; i < kNumSymbols; ++i) {
-        cdf[i] = cdf[i-1] + symPdf[i-1];
-    }
-    for (int i = 0; i < kNumSymbols; ++i) {
         uint32_t p = symPdf[i];
-        uint32_t shift = 32 - clz(p - 1);
+        uint32_t shift = 32 - __builtin_clz(p - 1);
         uint64_t magic = ((1ULL << 32) * ((1ULL << shift) - p)) / p + 1;
+        cdf[i] = cdf[i-1] + symPdf[i-1];
         table[i] = {p, cdf[i], static_cast<uint32_t>(magic), shift};
     }
 }
