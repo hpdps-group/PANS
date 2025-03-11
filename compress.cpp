@@ -8,17 +8,17 @@
 using namespace cpu_ans;
 
 void compressFileWithANS(
-		const std::string& inputFilePath,//输入数据文件路径
-		const std::string& tempFilePath,//压缩后文件保存路径
-        uint32_t& batchSize,//原本数据规模
-		uint32_t& compressedSize,//压缩后数据大小
+		const std::string& inputFilePath,
+		const std::string& tempFilePath,
+        uint32_t& batchSize,
+		uint32_t& compressedSize,
 		int precision
 		) {
     std::ifstream inputFile(inputFilePath, std::ios::binary | std::ios::ate);
     std::streamsize fileSize = inputFile.tellg();
     std::vector<uint8_t> fileData(fileSize);
     inputFile.seekg(0, std::ios::beg);
-    inputFile.read(reinterpret_cast<char*>(fileData.data()), fileSize);//全部按照uint8_t读入
+    inputFile.read(reinterpret_cast<char*>(fileData.data()), fileSize);
     inputFile.close();
 
     uint8_t* inPtrs = fileData.data();

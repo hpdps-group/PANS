@@ -1,2 +1,2 @@
 # cpuANS
-CPU版本的ANS算法
+CPU version of the ANS algorithm
