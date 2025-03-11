@@ -123,7 +123,7 @@ void ansCalcWeights(
     }
     std::vector<uint32_t> cdf(kNumSymbols, 0);
     uint32_t pp = symPdf[0];
-    uint32_t shift0 = 32 - clz(pp - 1);
+    uint32_t shift0 = 32 - __builtin_clz(pp - 1);
     uint64_t magic0 = ((1ULL << 32) * ((1ULL << shift0) - pp)) / pp + 1;
     table[0] = {pp, 0, static_cast<uint32_t>(magic0), shift0};
     for (int i = 1; i < kNumSymbols; ++i) {
