@@ -41,7 +41,6 @@ void ansDecodeKernel(
   auto numBlocks = header.getNumBlocks();
   auto totalUncompressedWords = header.getTotalUncompressedWords();
   auto writer = BatchWriter(out);
-  // #pragma omp parallel for proc_bind(spread) num_threads(32) 
   for(int i = 0; i < numBlocks; i ++){
     ANSStateT state[kWarpSize];
     for(int j = 0; j < kWarpSize; j ++){
