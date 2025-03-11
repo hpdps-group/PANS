@@ -290,7 +290,7 @@ void ansEncodeCoalesceBatch(
     uint8_t* out,
     uint32_t* outSize) {
   auto numBlocks = divUp(uncompressedWords, kDefaultBlockSize);
-  #pragma omp parallel for proc_bind(spread) num_threads(32) 
+  // #pragma omp parallel for proc_bind(spread) num_threads(32) 
   for(int i = 0; i < maxNumCompressedBlocks; i ++){
     ANSCoalescedHeader* headerOut = (ANSCoalescedHeader*)out;
     if(i == 0){
