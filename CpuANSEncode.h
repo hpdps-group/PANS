@@ -151,7 +151,7 @@ void ansEncodeBatch(
     uint32_t* compressedWords_dev,
     const uint4* table) {
     uint32_t numBlocks = (inSize + BlockSize - 1) / BlockSize;
-    #pragma omp parallel for num_threads(16) 
+    #pragma omp parallel for proc_bind(spread) num_threads(32) 
     for(int l = 0; l < maxNumCompressedBlocks; l ++){
       uint32_t start = l * BlockSize;
     auto blockSize =  std::min(start + BlockSize, (uint32_t)inSize) - start;
