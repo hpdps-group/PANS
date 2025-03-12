@@ -3,6 +3,22 @@ PANS is a parallel implementation of the Asymmetric Numeral Systems (ANS) compre
 - Parallel compression on NVIDIA/AMD GPUs using [dietGPU](https://github.com/facebookresearch/dietgpu/), with parallel decompression on multi-core CPUs.
 - Parallel compression on multi-core CPUs using PANS, with parallel decompression on NVIDIA GPUs via [dietGPU](https://github.com/facebookresearch/dietgpu/).
 
-## Build
+## Building
 
+Clone this repo using
+
+```shell
+git clone https://github.com/hpdps-group/PANS.git
+```
+
+Do the standard CMake thing:
+
+```shell
+cd PANS; mkdir build; cd build;
+cmake .. && make
+```
 ## Run
+
+compress: ./cpuans_compress input_file temp_file
+
+decompress: ./cpuans_decompress temp_file output_file
