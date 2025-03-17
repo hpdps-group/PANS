@@ -1,12 +1,18 @@
-
 cmake_minimum_required(VERSION 3.15)
 project(CPUANS LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 find_package(OpenMP REQUIRED)
 if(OpenMP_FOUND)
   add_compile_options(${OpenMP_CXX_FLAGS})
   link_libraries(${OpenMP_CXX_FLAGS})
 endif()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx512f -mavx512cd -mavx512vl -mavx512bw -fopenmp -march=native")
 
 add_executable(cpuans_compress
   compress.cpp

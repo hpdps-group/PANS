@@ -18,36 +18,96 @@
 #include <string>
 #include <vector>
 #include <numeric> 
+#include <immintrin.h>
+#include <thread>
+#include <parallel/algorithm>
+#include <avx512fintrin.h>
+// #include <parallel/sort>
 #include "CpuANSUtils.h"
 
 namespace cpu_ans {
-void ansHistogram(
-    const ANSDecodedT* in,
-    uint32_t size,
-    uint32_t* out) {
-    uint32_t local_hist[kNumSymbols] = {0};
-    uint32_t roundUp4 = std::min(size, getAlignmentRoundUp(sizeof(uint4), in));
-    auto remaining = size - roundUp4;
-    auto numU4 = divDown(remaining, sizeof(uint4));
-    auto inAligned = in + roundUp4;
-    auto inAligned4 = (const uint4*)inAligned;
-    for(int i = 0; i < roundUp4; i ++){
-      local_hist[in[i]]++;
+#define ALIGN alignas(64)
+
+void processBlock(const uint8_t* in, uint32_t size, uint32_t* localHist) {
+    constexpr uint32_t kAlign = 32;
+
+    uint32_t roundUp = std::min(size, static_cast<uint32_t>(getAlignmentRoundUp(kAlign, in)));
+    for (uint32_t i = 0; i < roundUp; ++i) {
+        localHist[in[i]]++;
     }
-    for(int i = 0; i < numU4; i ++){
-      uint4 v = inAligned4[i];
-      for(int j = 0; j < 4; j++){
-        local_hist[(v.x >> (8 * j)) & 0xFF]++;
-        local_hist[(v.y >> (8 * j)) & 0xFF]++;
-        local_hist[(v.z >> (8 * j)) & 0xFF]++;
-        local_hist[(v.w >> (8 * j)) & 0xFF]++;
-      }
+
+    const uint8_t* alignedIn = in + roundUp;
+    uint32_t remaining = size - roundUp;
+    uint32_t numChunks = remaining / kAlign;
+
+    const __m256i* avxIn = reinterpret_cast<const __m256i*>(alignedIn);
+    for (uint32_t i = 0; i < numChunks; ++i) {
+        __m256i vec = _mm256_load_si256(avxIn + i);
+        alignas(kAlign) uint8_t buffer[kAlign];
+        _mm256_store_si256(reinterpret_cast<__m256i*>(buffer), vec);
+        #pragma unroll(2)
+        for (uint32_t j = 0; j < kAlign - 7; j += 8) {
+            localHist[buffer[j]]++;
+            localHist[buffer[j+1]]++;
+            localHist[buffer[j+2]]++;
+            localHist[buffer[j+3]]++;
+            localHist[buffer[j+4]]++;
+            localHist[buffer[j+5]]++;
+            localHist[buffer[j+6]]++;
+            localHist[buffer[j+7]]++;
+        }
     }
-    for(int i = numU4 * sizeof(uint4); i < remaining; i ++) {
-      local_hist[inAligned[i]]++;
+    const uint8_t* tail = alignedIn + numChunks * kAlign;
+    for (uint32_t i = 0; i < remaining % kAlign; ++i) {
+        localHist[tail[i]]++;
     }
-    memcpy(out, local_hist, sizeof(uint32_t) * kNumSymbols);
 }
+
+void ansHistogram(
+    const uint8_t* in,
+    uint32_t size,
+    uint32_t* out,
+    bool multithread = true) {
+
+    memset(out, 0, kNumSymbols * sizeof(uint32_t));
+
+    if (size < 100000 || !multithread) {
+        uint32_t localHist[kNumSymbols] = {0};
+        processBlock(in, size, localHist);
+        for (int i = 0; i < kNumSymbols; ++i) {
+            out[i] += localHist[i];
+        }
+        return;
+    }
+
+    const unsigned numThreads = std::thread::hardware_concurrency();
+    std::vector<std::thread> threads;
+    std::vector<uint32_t> histograms(numThreads * kNumSymbols, 0);
+
+    const uint32_t blockSize = (size + numThreads - 1) / numThreads;
+
+    for (unsigned t = 0; t < numThreads; ++t) {
+        threads.emplace_back([t, &histograms, in, size, blockSize]() {
+            uint32_t* localHist = &histograms[t * kNumSymbols];
+            const uint32_t start = std::min(t * blockSize, size);
+            const uint32_t end = std::min((t + 1) * blockSize, size);
+            processBlock(in + start, end - start, localHist);
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+    
+    for (unsigned t = 0; t < numThreads; ++t) {
+        const uint32_t* localHist = &histograms[t * kNumSymbols];
+        #pragma unroll(2)
+        for (int i = 0; i < kNumSymbols - 1; i += 2) {
+            out[i] += localHist[i];
+            out[i+1] += localHist[i+1];
+        }
+    }
+}   
 
 void ansCalcWeights(
     int probBits,
@@ -289,60 +349,69 @@ void ansEncodeCoalesceBatch(
     uint32_t config_probBits,
     uint8_t* out,
     uint32_t* outSize) {
-  auto numBlocks = divUp(uncompressedWords, kDefaultBlockSize);
+
+  ANSCoalescedHeader* headerOut = (ANSCoalescedHeader*)out;
+  uint32_t totalCompressedWords = 0;
+  if(maxNumCompressedBlocks > 0){
+    totalCompressedWords =
+        compressedWordsPrefix_host[maxNumCompressedBlocks - 1] +
+            roundUp(
+            compressedWords_host[maxNumCompressedBlocks - 1],
+            kBlockAlignment / sizeof(ANSEncodedT));
+  }
+    
+  ANSCoalescedHeader header;
+  header.setMagicAndVersion();
+  header.setNumBlocks(maxNumCompressedBlocks);
+  header.setTotalUncompressedWords(uncompressedWords);
+  header.setTotalCompressedWords(totalCompressedWords);
+  header.setProbBits(config_probBits);
+
+  if (outSize) {
+    *outSize = header.getTotalCompressedSize();
+  }
+  *headerOut = header;
+
+  auto probsOut = headerOut->getSymbolProbs();
+
+  // Write out pdf
+  for (int j = 0; j < kNumSymbols; j ++) {
+    probsOut[j] = table[j].x;
+  }
+  auto blockWordsOut = headerOut->getBlockWords(maxNumCompressedBlocks);
+
+  // #pragma omp parallel for proc_bind(spread) num_threads(32)
   for(int i = 0; i < maxNumCompressedBlocks; i ++){
-    ANSCoalescedHeader* headerOut = (ANSCoalescedHeader*)out;
-    if(i == 0){
-    uint32_t totalCompressedWords = 0;
-    if(numBlocks > 0){
-      totalCompressedWords =
-          compressedWordsPrefix_host[numBlocks - 1] +
-          roundUp(
-              compressedWords_host[numBlocks - 1],
-              kBlockAlignment / sizeof(ANSEncodedT));
-    }
-    ANSCoalescedHeader header;
-    header.setMagicAndVersion();
-    header.setNumBlocks(numBlocks);
-    header.setTotalUncompressedWords(uncompressedWords);
-    header.setTotalCompressedWords(totalCompressedWords);
-    header.setProbBits(config_probBits);
-    if (outSize) {
-      *outSize = header.getTotalCompressedSize();
-    }
-    *headerOut = header;
-    auto probsOut = headerOut->getSymbolProbs();
-    for (int j = 0; j < kNumSymbols; j ++) {
-      probsOut[j] = table[j].x;
-    }
-    }         
+    
     auto uncoalescedBlock = compressedBlocks_host + i * uncoalescedBlockStride;
     for(int j = 0; j < kWarpSize; ++j){
       auto warpStateOut = (ANSWarpState*)uncoalescedBlock;
       headerOut->getWarpStates()[i].warpState[j] = (warpStateOut->warpState[j]);
     }
-    auto blockWordsOut = headerOut->getBlockWords(numBlocks);
-    for(int j = 0; j < numBlocks; ++j){
-      uint32_t lastBlockWords = uncompressedWords % kDefaultBlockSize;
-      lastBlockWords = lastBlockWords == 0 ? kDefaultBlockSize : lastBlockWords;
+    
+    uint32_t lastBlockWords = uncompressedWords % kDefaultBlockSize;
+    lastBlockWords = lastBlockWords == 0 ? kDefaultBlockSize : lastBlockWords;
 
-      uint32_t blockWords =
-          (j == numBlocks - 1) ? lastBlockWords : kDefaultBlockSize;
+    uint32_t blockWords =
+        (i == maxNumCompressedBlocks - 1) ? lastBlockWords : kDefaultBlockSize;
 
-      blockWordsOut[j] = uint2{
-          (blockWords << 16) | compressedWords_host[j], compressedWordsPrefix_host[j]};
-    }
+    blockWordsOut[i] = uint2{
+        (blockWords << 16) | compressedWords_host[i], compressedWordsPrefix_host[i]};
+
     uint32_t numWords = compressedWords_host[i];
     using LoadT = uint4;
+
     uint32_t limitEnd = divUp(numWords, kBlockAlignment / sizeof(ANSEncodedT));
+
     auto inT = (const LoadT*)(uncoalescedBlock + sizeof(ANSWarpState));
     auto outT =
-        (LoadT*)(headerOut->getBlockDataStart(numBlocks) + compressedWordsPrefix_host[i]);
+        (LoadT*)(headerOut->getBlockDataStart(maxNumCompressedBlocks) + compressedWordsPrefix_host[i]);
     for(int j = 0; j < limitEnd; ++j){
       outT[j] = inT[j];
     }
   }
 }
+
 
 void ansEncode(
     int precision,
