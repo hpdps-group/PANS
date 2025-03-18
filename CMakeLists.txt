@@ -12,7 +12,7 @@ if(OpenMP_FOUND)
   link_libraries(${OpenMP_CXX_FLAGS})
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx512f -mavx512cd -mavx512vl -mavx512bw -fopenmp -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -mavx2 -mavx512f -mavx512cd -mavx512vl -mavx512bw -fopenmp -march=native")
 
 add_executable(cpuans_compress
   compress.cpp
