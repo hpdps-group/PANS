@@ -458,42 +458,22 @@ void ansEncode(
 
   uint32_t maxUncompressedWords = inSize / sizeof(ANSDecodedT);
   uint32_t maxNumCompressedBlocks =
-      (maxUncompressedWords + kDefaultBlockSize - 1) / kDefaultBlockSize;//一个batch的数据以kDefaultBlockSize作为基准划分数据，形成多个数据块
+      (maxUncompressedWords + kDefaultBlockSize - 1) / kDefaultBlockSize;
   uint4* table = (uint4*)malloc(sizeof(uint4) * kNumSymbols);
   uint32_t* tempHistogram = (uint32_t*)malloc(sizeof(uint32_t) * kNumSymbols);
-  auto start = std::chrono::high_resolution_clock::now();
   ansHistogram(
       in,
       inSize,
       tempHistogram);
-  auto end = std::chrono::high_resolution_clock::now();
-    // 计算运行时间
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-
-    std::cout << "ansHistogram: " << duration.count() / 1000.0 << " ms" << std::endl;
-
-start = std::chrono::high_resolution_clock::now();
   ansCalcWeights(
       precision,
       inSize,
       tempHistogram,
       table);
-    end = std::chrono::high_resolution_clock::now();
-
-    // 计算运行时间
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-
-    std::cout << "ansCalcWeights: " << duration.count() / 1000.0 << " ms" << std::endl;
-  
-  // for(int i = 0; i < kNumSymbols; i ++){
-  //   printf("table[%d] = {%d, %d, %d, %d}\n", i, table[i].x, table[i].y, table[i].z, table[i].w);
-  // }
-  
   uint32_t uncoalescedBlockStride = getMaxBlockSizeUnCoalesced(kDefaultBlockSize);
   uint8_t* compressedBlocks_host = (uint8_t*)malloc(sizeof(uint8_t) * maxNumCompressedBlocks * uncoalescedBlockStride);
   uint32_t* compressedWords_host = (uint32_t*)malloc(sizeof(uint32_t) * maxNumCompressedBlocks);
   uint32_t* compressedWordsPrefix_host = (uint32_t*)malloc(sizeof(uint32_t) * maxNumCompressedBlocks);
-start = std::chrono::high_resolution_clock::now();
 #define RUN_ENCODE(BITS)                                       \
   do {                                                         \
     ansEncodeBatch<BITS, kDefaultBlockSize> (                   \
@@ -522,19 +502,12 @@ start = std::chrono::high_resolution_clock::now();
     }
 
 #undef RUN_ENCODE
-    end = std::chrono::high_resolution_clock::now();
-
-    // 计算运行时间
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-
-    std::cout << "ansEncodeBatch: " << duration.count() / 1000.0 << " ms" << std::endl;
   if (maxNumCompressedBlocks > 0) {
     compressedWordsPrefix_host[0] = 0;
     for(int i = 1; i < maxNumCompressedBlocks; i ++){
       compressedWordsPrefix_host[i] = compressedWordsPrefix_host[i - 1] + compressedWords_host[i - 1];
     }
   }  
-  start = std::chrono::high_resolution_clock::now();
   ansEncodeCoalesceBatch(
           compressedBlocks_host,
           inSize,
@@ -546,15 +519,8 @@ start = std::chrono::high_resolution_clock::now();
           precision,
           out,
           outSize);
-    end = std::chrono::high_resolution_clock::now();
-
-    // 计算运行时间
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-
-    std::cout << "ansEncodeCoalesceBatch: " << duration.count() / 1000.0 << " ms" << std::endl;
-
 }
-} // namespace 
+} 
 
 #undef RUN_ENCODE_ALL
 
