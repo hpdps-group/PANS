@@ -8,6 +8,7 @@
 #define CPU_ANS_INCLUDE_ANS_CPUANSDECODE_H
 
 #pragma once
+#include "CpuANSUtils.h"
 
 namespace cpu_ans {
 
