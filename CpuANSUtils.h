@@ -154,22 +154,6 @@ struct ANSCoalescedHeader {
     uint32_t unused1;
 };
 
-struct BatchWriter {
-  BatchWriter(void* out)
-      : out_((uint8_t*)out), outBlock_(nullptr) {}
-
-  inline void setBlock(uint32_t block) {
-    outBlock_ = out_ + block * kDefaultBlockSize;
-  }
-
-  inline void write(uint32_t offset, uint8_t sym) {
-    outBlock_[offset] = sym;
-  }
-
-  uint8_t* out_;
-  uint8_t* outBlock_;
-};
-
 inline uint32_t
 getRawCompBlockMaxSize(uint32_t uncompressedBlockBytes) {
   return roundUp(
