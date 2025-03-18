@@ -9,13 +9,6 @@
 
 #pragma once
 
-#include <omp.h>
-#include <cmath>
-#include <memory>
-#include <sstream>
-#include <vector>
-#include "CpuANSUtils.h"
-
 namespace cpu_ans {
 
 uint32_t packDecodeLookup(uint32_t sym, uint32_t pdf, uint32_t cdf) {return (cdf << 20) | (pdf << 8) | sym;}

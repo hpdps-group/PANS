@@ -9,24 +9,6 @@
 
 #pragma once
 
-#include <algorithm>
-#include <cstdint>
-#include <cmath>
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <numeric> 
-#include <immintrin.h>
-#include <thread>
-#include <parallel/algorithm>
-#include <avx512fintrin.h>
-#include <omp.h>
-#include <cstdlib>
-#include <stdexcept>
-#include <chrono>
-#include <atomic>
 #include "CpuANSUtils.h"
 
 namespace cpu_ans {
