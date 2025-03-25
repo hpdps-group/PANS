@@ -8,17 +8,17 @@
 using namespace cpu_ans;
 
 void compressFileWithANS(
-		const std::string& inputFilePath,
-		const std::string& tempFilePath,
-        uint32_t& batchSize,
-		uint32_t& compressedSize,
+		const std::string& inputFilePath,//输入数据文件路径
+		const std::string& tempFilePath,//压缩后文件保存路径
+        uint32_t& batchSize,//原本数据规模
+		uint32_t& compressedSize,//压缩后数据大小
 		int precision
 		) {
     std::ifstream inputFile(inputFilePath, std::ios::binary | std::ios::ate);
     std::streamsize fileSize = inputFile.tellg();
     std::vector<uint8_t> fileData(fileSize);
     inputFile.seekg(0, std::ios::beg);
-    inputFile.read(reinterpret_cast<char*>(fileData.data()), fileSize);
+    inputFile.read(reinterpret_cast<char*>(fileData.data()), fileSize);//全部按照uint8_t读入
     inputFile.close();
 
     uint8_t* inPtrs = fileData.data();
@@ -40,9 +40,9 @@ void compressFileWithANS(
 
     auto end = std::chrono::high_resolution_clock::now();
     double comp_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;  
-    double c_bw = ( 1.0 * fileSize / 1e9 ) / ( comp_time * 1e-3 );  
+    double c_bw = ( 1.0 * fileSize / 1e6 ) / ( comp_time * 1e-3 );  
     std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time << " ms B/W "   
-                  << std::fixed << std::setprecision(1) << c_bw << " GB/s " << std::endl;
+                  << std::fixed << std::setprecision(1) << c_bw << " MB/s " << std::endl;
     
     uint32_t outsize = *outCompressedSize;
     compressedSize = outsize;
@@ -65,6 +65,7 @@ int main(int argc, char* argv[]) {
         batchSize,
         compressedSize,
         precision);
+        // printf("compressedSize: %d\n", compressedSize);
     printf("compress ratio: %f\n", 1.0 * batchSize / compressedSize);
     return 0;
 }
