@@ -17,26 +17,22 @@ constexpr uint32_t kAlign = 32;
 
 __attribute__((target("avx2")))
 void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restrict localHist) {
-    // 处理未对齐的前缀部分
     uint32_t roundUp = std::min(size, static_cast<uint32_t>(getAlignmentRoundUp(kAlign, in)));
     for (uint32_t i = 0; i < roundUp; ++i) {
-        ++localHist[in[i]];  // 使用前置递增减少依赖
+        ++localHist[in[i]]; 
     }
 
     const uint8_t* alignedIn = in + roundUp;
     uint32_t remaining = size - roundUp;
     uint32_t numChunks = remaining / kAlign;
 
-    // 处理对齐的32字节块
     const __m256i* avxIn = reinterpret_cast<const __m256i*>(alignedIn);
     for (uint32_t i = 0; i < numChunks; ++i) {
         const __m256i vec = _mm256_load_si256(avxIn + i);
         const uint8_t* bytes = reinterpret_cast<const uint8_t*>(avxIn + i);
         
-        // 分组处理并插入软件预取
         _mm_prefetch(reinterpret_cast<const char*>(avxIn + i + 1), _MM_HINT_T0);
         
-        // 使用双寄存器流水线处理
         uint32_t v0 = bytes[0], v1 = bytes[1], v2 = bytes[2], v3 = bytes[3];
         uint32_t v4 = bytes[4], v5 = bytes[5], v6 = bytes[6], v7 = bytes[7];
         ++localHist[v0]; ++localHist[v1]; ++localHist[v2]; ++localHist[v3];
@@ -71,7 +67,6 @@ void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restr
         remainingTail -= 8;
     }
 
-    // 用switch处理剩余0-7字节
     switch (remainingTail) {
         case 7: ++localHist[tail[6]];
         case 6: ++localHist[tail[5]];
@@ -96,7 +91,6 @@ void ansHistogram(
         alignas(64) uint32_t localHist[kNumSymbols] = {0};
         processBlock(in, size, localHist);
         
-        // 向量化合并
         for (int i = 0; i < kNumSymbols; i += 8) {
             _mm256_store_si256(
                 reinterpret_cast<__m256i*>(out + i),
@@ -113,13 +107,11 @@ void ansHistogram(
     std::vector<std::thread> threads;
     alignas(64) std::vector<uint32_t> histograms(numThreads * kNumSymbols, 0);
 
-    // 动态任务分块（避免尾部不均）
     const uint32_t blockSize = (size + numThreads * 4 - 1) / (numThreads * 4);
     std::atomic<uint32_t> currentBlock(0);
 
     for (unsigned t = 0; t < numThreads; ++t) {
         threads.emplace_back([&, t]() {
-            // 设置CPU亲和性
             cpu_set_t cpuset;
             CPU_ZERO(&cpuset);
             CPU_SET(t % numThreads, &cpuset);
@@ -140,7 +132,6 @@ void ansHistogram(
         thread.join();
     }
     
-    // 优化合并：按线程顺序累加，提升缓存效率
     for (unsigned t = 0; t < numThreads; ++t) {
         const uint32_t* src = &histograms[t * kNumSymbols];
         #pragma omp simd aligned(src, out:64)
