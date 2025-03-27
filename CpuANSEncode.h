@@ -19,17 +19,20 @@ __attribute__((target("avx2")))
 void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restrict localHist) {
     uint32_t roundUp = std::min(size, static_cast<uint32_t>(getAlignmentRoundUp(kAlign, in)));
     for (uint32_t i = 0; i < roundUp; ++i) {
-        ++localHist[in[i]];
+        ++localHist[in[i]]; 
     }
+
     const uint8_t* alignedIn = in + roundUp;
     uint32_t remaining = size - roundUp;
     uint32_t numChunks = remaining / kAlign;
+
     const __m256i* avxIn = reinterpret_cast<const __m256i*>(alignedIn);
     for (uint32_t i = 0; i < numChunks; ++i) {
         const __m256i vec = _mm256_load_si256(avxIn + i);
         const uint8_t* bytes = reinterpret_cast<const uint8_t*>(avxIn + i);
+        
         _mm_prefetch(reinterpret_cast<const char*>(avxIn + i + 1), _MM_HINT_T0);
-
+        
         uint32_t v0 = bytes[0], v1 = bytes[1], v2 = bytes[2], v3 = bytes[3];
         uint32_t v4 = bytes[4], v5 = bytes[5], v6 = bytes[6], v7 = bytes[7];
         ++localHist[v0]; ++localHist[v1]; ++localHist[v2]; ++localHist[v3];
@@ -63,6 +66,7 @@ void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restr
         tail += 8;
         remainingTail -= 8;
     }
+
     switch (remainingTail) {
         case 7: ++localHist[tail[6]];
         case 6: ++localHist[tail[5]];
@@ -86,6 +90,7 @@ void ansHistogram(
     if (size < 100000 || !multithread) {
         alignas(64) uint32_t localHist[kNumSymbols] = {0};
         processBlock(in, size, localHist);
+        
         for (int i = 0; i < kNumSymbols; i += 8) {
             _mm256_store_si256(
                 reinterpret_cast<__m256i*>(out + i),
@@ -136,10 +141,12 @@ void ansHistogram(
     }
 }
 
+template <int one_bits, int kStateCheckMul>
 void ansCalcWeights(
     int probBits,
     uint32_t totalNum,
     const uint32_t* counts,
+    uint16_t* __restrict probsOut,
     uint4* table) {
     if (totalNum == 0) return;
     const uint32_t kProbWeight = 1 << probBits;
@@ -190,7 +197,7 @@ void ansCalcWeights(
         }
       }
     }
-    else if (diff < 0) {
+    else{
       diff = -diff;
       while(diff > 0){
         int qNumGt1s = 0;
@@ -200,10 +207,8 @@ void ansCalcWeights(
         int iterToApply = diff < qNumGt1s ? diff : qNumGt1s;
         int startIndex = qNumGt1s - iterToApply;
         #pragma omp parallel for num_threads(32) schedule(static)
-        for(int j = 0; j < kNumSymbols; ++j){
-          if(j >= startIndex && j < qNumGt1s){
-            qProb[j] -= 1;
-          }
+        for(int j = startIndex; j < qNumGt1s; ++j){
+          qProb[j] --;
         }
         diff -= iterToApply;
       }  
@@ -214,21 +219,25 @@ void ansCalcWeights(
     for(int i = 0; i < kNumSymbols; i ++){
       symPdf[tidSymbol[i]] = qProb[i];
     }
-    std::vector<uint32_t> cdf(kNumSymbols, 0);
+    std::vector<uint16_t> cdf(kNumSymbols, 0);
     uint32_t pp = symPdf[0];
+    probsOut[0] = pp;
     uint32_t shift0 = 32 - __builtin_clz(pp - 1);
     uint64_t magic0 = ((1ULL << 32) * ((1ULL << shift0) - pp)) / pp + 1;
-    table[0] = {pp, 0, static_cast<uint32_t>(magic0), shift0};
+    table[0] = {pp, 0, static_cast<uint32_t>(magic0), shift0
+    };
     for (int i = 1; i < kNumSymbols; ++i) {
         uint32_t p = symPdf[i];
+        probsOut[i] = p;
         uint32_t shift = 32 - __builtin_clz(p - 1);
         uint64_t magic = ((1ULL << 32) * ((1ULL << shift) - p)) / p + 1;
         cdf[i] = cdf[i-1] + symPdf[i-1];
-        table[i] = {p, cdf[i], static_cast<uint32_t>(magic), shift};
+        table[i] = {p, cdf[i], static_cast<uint32_t>(magic), shift
+        };
     }
 }
 
-template <int ProbBits, int BlockSize>
+template <int one_bits, int BlockSize, int kStateCheckMul>
 void ansEncodeBatch(
     uint8_t* in,
     int inSize,
@@ -236,88 +245,84 @@ void ansEncodeBatch(
     uint32_t uncoalescedBlockStride,
     uint8_t* compressedBlocks_dev,
     uint32_t* compressedWords_dev,
-    uint32_t* compressedWordsPrefix_host,
+    uint32_t* compressedWords_host_prefix,
     const uint4* table) {
-    constexpr ANSStateT kStateCheckMul = kANSStateBits - ProbBits;
-    #pragma omp parallel for proc_bind(spread) num_threads(32) 
-    for(int l = 0; l < maxNumCompressedBlocks; l ++){
+    int num_threads = 16;
+    #pragma omp parallel proc_bind(spread) num_threads(num_threads) 
+    {
+    #pragma omp for schedule(dynamic, 8)
+    for(int l = 0; l < maxNumCompressedBlocks; ++l){
     uint32_t start = l * BlockSize;
     auto blockSize =  std::min(start + BlockSize, (uint32_t)inSize) - start;
     auto inBlock = in + start;
     auto outBlock = (ANSWarpState*)(compressedBlocks_dev
         + l * uncoalescedBlockStride);
     ANSEncodedT* outWords = (ANSEncodedT*)(outBlock + 1);
-    uint32_t inOffset[kWarpSize];
-    uint32_t state[kWarpSize];
-    #pragma unroll(4)
-    for(int i = 0; i < kWarpSize; ++i){
-      inOffset[i] = i;
-      state[i] = kANSStartState;
-    }
+    uint64_t state[kWarpSize];
+    std::fill(std::begin(state), std::end(state), kANSStartState);
     uint32_t outOffset = 0;
-    uint32_t limit = roundDown(blockSize, kWarpSize << 3);
-    int cyclenum0 = limit / (kWarpSize << 3);
+    uint32_t limit = roundDown(blockSize, 256);
+    int cyclenum0 = limit >> 8;
     for (int i = 0; i < cyclenum0; ++i) {
+      int idx0 = i << 8;
       for (int j = 0; j < 8; ++j) {
+        int idx1 = idx0 + (j << 5);
+        #pragma unroll(16)
         for(int k = 0; k < kWarpSize; ++k){
-          auto lookup = table[inBlock[inOffset[k] + j * kWarpSize]];
+          auto lookup = table[inBlock[k + idx1]];
           uint32_t pdf = lookup.x;
-          ANSStateT maxStateCheck = pdf << kStateCheckMul;
-          uint32_t write = (state[k] >= maxStateCheck);
-          if (write) {
-            outWords[outOffset] = (state[k] & kANSEncodedMask);
-            state[k] = (state[k] >> kANSEncodedBits);
-            outOffset ++;
-          }
-          uint32_t div = (umulhi(state[k], lookup.z) + state[k]) >> lookup.w;
-          state[k] = (div << ProbBits) + state[k] - (div * pdf) + lookup.y;
+          uint32_t write_mask = (state[k] >= uint32_t(pdf << kStateCheckMul));
+          outWords[outOffset] = (state[k] & kANSEncodedMask);
+          outOffset += write_mask;
+          state[k] >>= kANSEncodedBits * write_mask;
+          uint64_t div = ((state[k] * lookup.z >> 32) + state[k]) >> lookup.w;
+          state[k] += div * (one_bits - pdf) + (uint64_t)lookup.y;
         }
-      }
-      for(int k = 0; k < kWarpSize; ++k){
-        inOffset[k] += kWarpSize << 3;
       }
     }
   if (blockSize - limit) {
     uint32_t limit1 = roundDown(blockSize, kWarpSize);
     int cyclenum1 = (limit1 - limit) / kWarpSize;
     for(int i = 0; i < cyclenum1; ++i){
+      int idx = limit + (i << 5);
       for(int k = 0; k < kWarpSize; ++k){
-          auto lookup = table[inBlock[inOffset[k]]];
-          uint32_t pdf = lookup.x;
-          ANSStateT maxStateCheck = pdf << kStateCheckMul;
-          uint32_t write = (state[k] >= maxStateCheck);
-          if (write) {
-            outWords[outOffset] = (state[k] & kANSEncodedMask);
-            state[k] = (state[k] >> kANSEncodedBits);
-            outOffset ++;
-          }
-          uint32_t div = (umulhi(state[k], lookup.z) + state[k]) >> lookup.w;
-          state[k] = (div << ProbBits) + state[k] - (div * pdf) + lookup.y;
-          inOffset[k] += kWarpSize;
+          auto lookup = table[inBlock[k + idx]];
+          uint64_t pdf = lookup.x;
+          uint64_t tempstate = state[k];
+          bool write_mask = (tempstate >= (pdf << kStateCheckMul));
+          outWords[outOffset] = ((uint32_t)tempstate & kANSEncodedMask);
+          outOffset += write_mask;
+          tempstate >>= kANSEncodedBits * write_mask;
+          uint64_t div = ((tempstate * lookup.z >> 32) + tempstate) >> lookup.w;
+          state[k] = div * (one_bits - pdf) + (uint64_t)lookup.y + tempstate;
       }
     }
     if (blockSize - limit1) {
-      for(int k = 0; k < kWarpSize && inOffset[k] < blockSize; ++k){
-          auto lookup = table[inBlock[inOffset[k]]];
-          uint32_t pdf = lookup.x;
-          ANSStateT maxStateCheck = pdf << kStateCheckMul;
-          uint32_t write = (state[k] >= maxStateCheck);
-          if (write) {
-            outWords[outOffset] = (state[k] & kANSEncodedMask);
-            state[k] = (state[k] >> kANSEncodedBits);
-            outOffset ++;
-          }
-          uint32_t div = (umulhi(state[k], lookup.z) + state[k]) >> lookup.w;
-          state[k] = (div << ProbBits) + state[k] - (div * pdf) + lookup.y;
+      int num = blockSize - limit1;
+      for(int k = 0; k < num; ++k){
+          auto lookup = table[inBlock[k + limit1]];
+          uint64_t pdf = lookup.x;
+          uint64_t tempstate = state[k];
+          bool write_mask = (tempstate >= (pdf << kStateCheckMul));
+          outWords[outOffset] = ((uint32_t)tempstate & kANSEncodedMask);
+          outOffset += write_mask;
+          tempstate >>= kANSEncodedBits * write_mask;
+          uint64_t div = ((tempstate * lookup.z >> 32) + tempstate) >> lookup.w;
+          state[k] = div * (one_bits - pdf) + (uint64_t)lookup.y + tempstate;
       }
-    }
+    } 
   }
+  auto outblockwarpstate = outBlock->warpState;
+  #pragma omp simd
   for(int i = 0; i < kWarpSize; ++i){
-    outBlock->warpState[i] = state[i];
+    outblockwarpstate[i] = state[i];
   }
   compressedWords_dev[l] = outOffset;
+  compressedWords_host_prefix[l] = roundUp(outOffset, kBlockAlignment / sizeof(ANSEncodedT));
+  }
   }
 }
+
 
 void ansEncodeCoalesceBatch(
     const uint8_t* __restrict__ compressedBlocks_host,
@@ -325,6 +330,7 @@ void ansEncodeCoalesceBatch(
     uint32_t maxNumCompressedBlocks,
     uint32_t uncoalescedBlockStride,
     const uint32_t* __restrict__ compressedWords_host,
+    const uint32_t* __restrict__ compressedWords_host_prefix,
     uint32_t* __restrict__ compressedWordsPrefix_host,
     const uint4* __restrict__ table,
     uint32_t config_probBits,
@@ -334,6 +340,7 @@ void ansEncodeCoalesceBatch(
   ANSCoalescedHeader* headerOut = (ANSCoalescedHeader*)out;
   uint32_t totalCompressedWords = 0;
   if(maxNumCompressedBlocks > 0){
+    std::exclusive_scan(compressedWords_host_prefix, compressedWords_host_prefix + maxNumCompressedBlocks, compressedWordsPrefix_host, 0);
     totalCompressedWords =
         compressedWordsPrefix_host[maxNumCompressedBlocks - 1] +
             roundUp(
@@ -352,12 +359,13 @@ void ansEncodeCoalesceBatch(
   *headerOut = header;
 
   auto probsOut = headerOut->getSymbolProbs();
+  
   for (int j = 0; j < kNumSymbols; j ++) {
     probsOut[j] = table[j].x;
   }
   auto blockWordsOut = headerOut->getBlockWords(maxNumCompressedBlocks);
   auto BlockDataStart = headerOut->getBlockDataStart(maxNumCompressedBlocks);
-  compressedWordsPrefix_host[0] = 0;
+
   int i = 0;
   for(; i < maxNumCompressedBlocks - 1; i ++){
     
@@ -377,7 +385,7 @@ void ansEncodeCoalesceBatch(
     auto inT = (const uint4*)(uncoalescedBlock + sizeof(ANSWarpState));
     auto outT = (uint4*)(BlockDataStart + compressedWordsPrefix_host[i]);
 
-    memcpy(outT, inT, limitEnd << 4);
+    __builtin_memcpy(outT, inT, limitEnd << 4);
   }
   auto uncoalescedBlock = compressedBlocks_host + i * uncoalescedBlockStride;
   for(int j = 0; j < kWarpSize; ++j){
@@ -398,7 +406,7 @@ void ansEncodeCoalesceBatch(
   auto inT = (const uint4*)(uncoalescedBlock + sizeof(ANSWarpState));
   auto outT = (uint4*)(BlockDataStart + compressedWordsPrefix_host[i]);
 
-  memcpy(outT, inT, limitEnd << 4);
+  __builtin_memcpy(outT, inT, limitEnd << 4);
 }
 
 void ansEncode(
@@ -406,80 +414,82 @@ void ansEncode(
     uint8_t* in,
     uint32_t inSize,
     uint8_t* out,
-    uint32_t* outSize) {
+    uint32_t* outSize,
+    ANSCoalescedHeader* headerOut,
+    uint32_t& maxNumCompressedBlocks,
+    uint32_t& uncoalescedBlockStride,
+    uint8_t* compressedBlocks_host,
+    uint32_t* compressedWords_host,
+    uint32_t* compressedWords_host_prefix,
+    uint32_t* compressedWordsPrefix_host) {
+  ANSCoalescedHeader header;
+  header.setProbBits(precision);
 
   uint32_t maxUncompressedWords = inSize / sizeof(ANSDecodedT);
-  uint32_t maxNumCompressedBlocks =
+  maxNumCompressedBlocks =
       (maxUncompressedWords + kDefaultBlockSize - 1) / kDefaultBlockSize;
+
+  header.setNumBlocks(maxNumCompressedBlocks);
+  header.setTotalUncompressedWords(inSize);
+
   uint4* table = (uint4*)malloc(sizeof(uint4) * kNumSymbols);
   uint32_t* tempHistogram = (uint32_t*)malloc(sizeof(uint32_t) * kNumSymbols);
-
   ansHistogram(
       in,
       inSize,
       tempHistogram);
 
-  ansCalcWeights(
-      precision,
-      inSize,
-      tempHistogram,
-      table);
-
-  uint32_t uncoalescedBlockStride = getMaxBlockSizeUnCoalesced(kDefaultBlockSize);
-  uint8_t* compressedBlocks_host = (uint8_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint8_t) * maxNumCompressedBlocks * uncoalescedBlockStride);
-  uint32_t* compressedWords_host = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
-  uint32_t* compressedWordsPrefix_host = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
-
-#define RUN_ENCODE(BITS)                                       \
-  do {                                                         \
-    ansEncodeBatch<BITS, kDefaultBlockSize> (                   \
+#define RUN_ENCODE(ONEBITS, kStateCheckMul)                                       \
+  do {    \
+    ansCalcWeights<ONEBITS, kStateCheckMul>(\
+      precision,\
+      inSize,\
+      tempHistogram,\
+      headerOut->getSymbolProbs(),\
+      table);                                                     \
+    ansEncodeBatch<ONEBITS, kDefaultBlockSize, kStateCheckMul>(\
             in,\
             inSize,                                        \
             maxNumCompressedBlocks,                            \
             uncoalescedBlockStride,                            \
             compressedBlocks_host,                       \
-            compressedWords_host,         \
-            compressedWordsPrefix_host,                       \
+            compressedWords_host,  \
+            compressedWords_host_prefix,                      \
             table);                                 \
   } while (false)
 
     switch (precision) {
       case 9:
-        RUN_ENCODE(9);
+        RUN_ENCODE(512, 22);
         break;
       case 10:
-        RUN_ENCODE(10);
+        RUN_ENCODE(1024, 21);
         break;
       case 11:
-        RUN_ENCODE(11);
+        RUN_ENCODE(2048, 20);
         break;
       default:
         std::cout<< "unhandled pdf precision " << precision << std::endl;
     }
 
 #undef RUN_ENCODE
+  uint32_t totalCompressedWords = 0;
+  if(maxNumCompressedBlocks > 0){
+    std::exclusive_scan(compressedWords_host_prefix, compressedWords_host_prefix + maxNumCompressedBlocks, compressedWordsPrefix_host, 0);
+    totalCompressedWords =
+        compressedWordsPrefix_host[maxNumCompressedBlocks - 1] +
+            roundUp(
+            compressedWords_host[maxNumCompressedBlocks - 1],
+            kBlockAlignment / sizeof(ANSEncodedT));
+  }
+  header.setTotalCompressedWords(totalCompressedWords);
 
-  if (maxNumCompressedBlocks > 0) {
-    compressedWordsPrefix_host[0] = 0;
-    for(int i = 1; i < maxNumCompressedBlocks; i ++){
-      compressedWordsPrefix_host[i] = compressedWordsPrefix_host[i - 1] + compressedWords_host[i - 1];
-    }
-  }  
-
-  ansEncodeCoalesceBatch(
-          compressedBlocks_host,
-          inSize,
-          maxNumCompressedBlocks,
-          uncoalescedBlockStride,
-          compressedWords_host,
-          compressedWordsPrefix_host,
-          table,
-          precision,
-          out,
-          outSize);
+  *outSize = header.getTotalCompressedSize();
+  *headerOut = header;
 }
 } // namespace 
 
 #undef RUN_ENCODE_ALL
 
 #endif
+

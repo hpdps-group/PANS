@@ -22,6 +22,7 @@
 #include <chrono>
 #include <atomic>
 #include <omp.h>
+#include <emmintrin.h>
 
 namespace cpu_ans {
 
@@ -31,16 +32,20 @@ using ANSDecodedT = uint8_t;
 
 struct ANSWarpState { ANSStateT warpState[32]; };
 struct uint2 { uint32_t x, y; };
-struct uint4 { uint32_t x, y, z, w; };
+struct uint3 { uint32_t x, y, z; };
+// struct uint4 { uint32_t x, y, z, w; };
+struct uint4 { uint32_t x;
+               uint16_t y;
+               uint32_t z, w;
+               uint16_t v;};
 
 inline uint32_t divDown(uint32_t a, uint32_t b) { return a / b; }
 inline uint32_t getAlignmentRoundUp(size_t alignment, const void* ptr) {
     return (alignment - (reinterpret_cast<uintptr_t>(ptr) % alignment)) % alignment;
 }
 
-template <typename U, typename V>
-inline auto divDown(U a, V b) -> decltype(a + b) {
-  return (a / b);
+inline uint32_t umulhi(uint32_t a, uint32_t b) {
+    return (uint32_t)(((uint64_t)a * b) >> 32);
 }
 
 template <typename U, typename V>
@@ -64,7 +69,7 @@ constexpr uint32_t kMaxBEPSThreads = 512;
 constexpr uint32_t kDefaultBlockSize = 4096;
 constexpr int kANSDefaultProbBits = 10;
 constexpr int kANSRequiredAlignment = 4;
-constexpr int kANSStateBits = (sizeof(ANSStateT) * 8) - 1;
+constexpr int kANSStateBits = (sizeof(ANSStateT) * 8) - 1; //31
 constexpr int kANSEncodedBits = sizeof(ANSEncodedT) * 8;
 constexpr ANSStateT kANSStartState = ANSStateT(1) << (kANSStateBits - kANSEncodedBits);
 constexpr ANSStateT kANSMinState = ANSStateT(1) << (kANSStateBits - kANSEncodedBits);
@@ -73,7 +78,7 @@ constexpr uint32_t kANSMagic = 0xd00d;
 constexpr uint32_t kANSVersion = 0x0001;
 constexpr uint32_t kBlockAlignment = 16;
 
-struct ANSCoalescedHeader {
+struct alignas(32) ANSCoalescedHeader {
     static inline uint32_t getCompressedOverhead(uint32_t numBlocks) {
         int kAlignment = kBlockAlignment / sizeof(uint2);
         if (kAlignment == 0) kAlignment = 1;
