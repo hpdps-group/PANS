@@ -64,7 +64,7 @@ void compressFileWithANS(
 
     auto blockWordsOut = headerOut->getBlockWords(maxNumCompressedBlocks);
     auto BlockDataStart = headerOut->getBlockDataStart(maxNumCompressedBlocks);
-
+    
     int i = 0;
     for(; i < maxNumCompressedBlocks - 1; i ++){
     
@@ -75,16 +75,8 @@ void compressFileWithANS(
       }
 
       blockWordsOut[i] = uint2{
-          (kDefaultBlockSize << 16) | compressedWords_host[i], compressedWordsPrefix_host[i]};
-
-      uint32_t numWords = compressedWords_host[i];
-
-      uint32_t limitEnd = divUp(numWords, kBlockAlignment / sizeof(ANSEncodedT));
-
-      auto inT = (const uint4*)(uncoalescedBlock + sizeof(ANSWarpState));
-      auto outT = (uint4*)(BlockDataStart + compressedWordsPrefix_host[i]);
-
-      __builtin_memcpy(outT, inT, limitEnd << 4);
+          (kDefaultBlockSize << 16) | compressedWords_host[i], 
+          compressedWordsPrefix_host[i]};
     }
     auto uncoalescedBlock = compressedBlocks_host + i * uncoalescedBlockStride;
     for(int j = 0; j < kWarpSize; ++j){
@@ -98,6 +90,19 @@ void compressFileWithANS(
     blockWordsOut[i] = uint2{
         (lastBlockWords << 16) | compressedWords_host[i], compressedWordsPrefix_host[i]};
 
+    i = 0;
+    for(; i < maxNumCompressedBlocks - 1; i ++){
+    
+      auto uncoalescedBlock = compressedBlocks_host + i * uncoalescedBlockStride;
+      uint32_t numWords = compressedWords_host[i];
+
+      uint32_t limitEnd = divUp(numWords, kBlockAlignment / sizeof(ANSEncodedT));
+
+      auto inT = (const uint4*)(uncoalescedBlock + sizeof(ANSWarpState));
+      auto outT = (uint4*)(BlockDataStart + compressedWordsPrefix_host[i]);
+      __builtin_memcpy(outT, inT, limitEnd << 4);
+    }
+    uncoalescedBlock = compressedBlocks_host + i * uncoalescedBlockStride;
     uint32_t numWords = compressedWords_host[i];
 
     uint32_t limitEnd = divUp(numWords, kBlockAlignment / sizeof(ANSEncodedT));
