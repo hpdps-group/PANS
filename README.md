@@ -19,6 +19,7 @@ cmake .. && make
 ```
 ## Run
 
-compress: ./cpuans_compress input_file temp_file
-
-decompress: ./cpuans_decompress temp_file output_file
+```shell
+compress: ./hipans_compress input_file temp_file
+decompress: ./hipans_decompress temp_file output_file
+```
