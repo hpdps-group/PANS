@@ -62,18 +62,17 @@ void compressFileWithANS(
     std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time << " ms B/W "   
                   << std::fixed << std::setprecision(1) << c_bw << " MB/s " << std::endl;
 
+    std::ofstream outputFile(tempFilePath, std::ios::binary);
     auto blockWordsOut = headerOut->getBlockWords(maxNumCompressedBlocks);
     auto BlockDataStart = headerOut->getBlockDataStart(maxNumCompressedBlocks);
     
     int i = 0;
     for(; i < maxNumCompressedBlocks - 1; i ++){
-    
       auto uncoalescedBlock = compressedBlocks_host + i * uncoalescedBlockStride;
       for(int j = 0; j < kWarpSize; ++j){
         auto warpStateOut = (ANSWarpState*)uncoalescedBlock;
         headerOut->getWarpStates()[i].warpState[j] = (warpStateOut->warpState[j]);
       }
-
       blockWordsOut[i] = uint2{
           (kDefaultBlockSize << 16) | compressedWords_host[i], 
           compressedWordsPrefix_host[i]};
@@ -83,40 +82,30 @@ void compressFileWithANS(
       auto warpStateOut = (ANSWarpState*)uncoalescedBlock;
       headerOut->getWarpStates()[i].warpState[j] = (warpStateOut->warpState[j]);
     }
-    
     uint32_t lastBlockWords = fileSize % kDefaultBlockSize;
     lastBlockWords = lastBlockWords == 0 ? kDefaultBlockSize : lastBlockWords;
-
     blockWordsOut[i] = uint2{
         (lastBlockWords << 16) | compressedWords_host[i], compressedWordsPrefix_host[i]};
+    outputFile.write(reinterpret_cast<const char*>(encPtrs), headerOut->getCompressedOverhead(maxNumCompressedBlocks));
 
     i = 0;
     for(; i < maxNumCompressedBlocks - 1; i ++){
-    
       auto uncoalescedBlock = compressedBlocks_host + i * uncoalescedBlockStride;
       uint32_t numWords = compressedWords_host[i];
-
       uint32_t limitEnd = divUp(numWords, kBlockAlignment / sizeof(ANSEncodedT));
-
       auto inT = (const uint4*)(uncoalescedBlock + sizeof(ANSWarpState));
       auto outT = (uint4*)(BlockDataStart + compressedWordsPrefix_host[i]);
-      __builtin_memcpy(outT, inT, limitEnd << 4);
+      outputFile.write(reinterpret_cast<const char*>(inT), limitEnd << 4);
     }
-    uncoalescedBlock = compressedBlocks_host + i * uncoalescedBlockStride;
+
     uint32_t numWords = compressedWords_host[i];
-
     uint32_t limitEnd = divUp(numWords, kBlockAlignment / sizeof(ANSEncodedT));
-
     auto inT = (const uint4*)(uncoalescedBlock + sizeof(ANSWarpState));
     auto outT = (uint4*)(BlockDataStart + compressedWordsPrefix_host[i]);
-
-    __builtin_memcpy(outT, inT, limitEnd << 4);
-
+    outputFile.write(reinterpret_cast<const char*>(inT), limitEnd << 4);
     uint32_t outsize = *outCompressedSize;
     compressedSize = outsize;
-
-    std::ofstream outputFile(tempFilePath, std::ios::binary);
-    outputFile.write(reinterpret_cast<const char*>(encPtrs), outsize*sizeof(uint8_t));
+    
     outputFile.close();
 }
 
