@@ -75,10 +75,10 @@ target_include_directories(gpu_ans
       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-add_executable(compress examples/compress.cu)
+add_executable(cudaans_compress examples/compress.cu)
 target_link_libraries(compress
         gpu_ans)
 
-add_executable(decompress examples/decompress.cu)
+add_executable(cudaans_decompress examples/decompress.cu)
 target_link_libraries(decompress
         gpu_ans)
