@@ -20,6 +20,6 @@ cmake .. && make
 ## Run
 
 ```shell
-compress: ./cudaans_compress input_file temp_file
-decompress: ./cudaans_decompress temp_file output_file
+compress: ./bin/cudaans_compress input_file temp_file
+decompress: ./bin/cudaans_decompress temp_file output_file
 ```
