@@ -82,58 +82,60 @@ void ansHistogram(
     bool multithread = true) {
 
     std::memset(out, 0, kNumSymbols * sizeof(uint32_t));
-
-    if (size < 100000 || !multithread) {
-        alignas(64) uint32_t localHist[kNumSymbols] = {0};
-        processBlock(in, size, localHist);
-        for (int i = 0; i < kNumSymbols; i += 8) {
-            _mm256_store_si256(
-                reinterpret_cast<__m256i*>(out + i),
-                _mm256_add_epi32(
-                    _mm256_load_si256(reinterpret_cast<const __m256i*>(out + i)),
-                    _mm256_load_si256(reinterpret_cast<const __m256i*>(localHist + i))
-                )
-            );
-        }
-        return;
+    for(int i = 0; i < size; i ++){
+      out[in[i]]++;
     }
+    // if (size < 100000 || !multithread) {
+    //     alignas(64) uint32_t localHist[kNumSymbols] = {0};
+    //     processBlock(in, size, localHist);
+    //     for (int i = 0; i < kNumSymbols; i += 8) {
+    //         _mm256_store_si256(
+    //             reinterpret_cast<__m256i*>(out + i),
+    //             _mm256_add_epi32(
+    //                 _mm256_load_si256(reinterpret_cast<const __m256i*>(out + i)),
+    //                 _mm256_load_si256(reinterpret_cast<const __m256i*>(localHist + i))
+    //             )
+    //         );
+    //     }
+    //     return;
+    // }
 
-    const unsigned numThreads = std::thread::hardware_concurrency();
-    std::vector<std::thread> threads;
-    alignas(64) std::vector<uint32_t> histograms(numThreads * kNumSymbols, 0);
+    // const unsigned numThreads = std::thread::hardware_concurrency();
+    // std::vector<std::thread> threads;
+    // alignas(64) std::vector<uint32_t> histograms(numThreads * kNumSymbols, 0);
 
-    const uint32_t blockSize = (size + numThreads * 4 - 1) / (numThreads * 4);
-    std::atomic<uint32_t> currentBlock(0);
+    // const uint32_t blockSize = (size + numThreads * 4 - 1) / (numThreads * 4);
+    // std::atomic<uint32_t> currentBlock(0);
 
-    for (unsigned t = 0; t < numThreads; ++t) {
-        threads.emplace_back([&, t]() {
-            cpu_set_t cpuset;
-            CPU_ZERO(&cpuset);
-            CPU_SET(t % numThreads, &cpuset);
-            pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    // for (unsigned t = 0; t < numThreads; ++t) {
+    //     threads.emplace_back([&, t]() {
+    //         cpu_set_t cpuset;
+    //         CPU_ZERO(&cpuset);
+    //         CPU_SET(t % numThreads, &cpuset);
+    //         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 
-            uint32_t* localHist = &histograms[t * kNumSymbols];
-            while (true) {
-                const uint32_t blockIdx = currentBlock.fetch_add(1);
-                const uint32_t start = blockIdx * blockSize;
-                if (start >= size) break;
-                const uint32_t end = std::min(start + blockSize, size);
-                processBlock(in + start, end - start, localHist);
-            }
-        });
-    }
+    //         uint32_t* localHist = &histograms[t * kNumSymbols];
+    //         while (true) {
+    //             const uint32_t blockIdx = currentBlock.fetch_add(1);
+    //             const uint32_t start = blockIdx * blockSize;
+    //             if (start >= size) break;
+    //             const uint32_t end = std::min(start + blockSize, size);
+    //             processBlock(in + start, end - start, localHist);
+    //         }
+    //     });
+    // }
 
-    for (auto& thread : threads) {
-        thread.join();
-    }
+    // for (auto& thread : threads) {
+    //     thread.join();
+    // }
     
-    for (unsigned t = 0; t < numThreads; ++t) {
-        const uint32_t* src = &histograms[t * kNumSymbols];
-        #pragma omp simd aligned(src, out:64)
-        for (int i = 0; i < kNumSymbols; ++i) {
-            out[i] += src[i];
-        }
-    }
+    // for (unsigned t = 0; t < numThreads; ++t) {
+    //     const uint32_t* src = &histograms[t * kNumSymbols];
+    //     #pragma omp simd aligned(src, out:64)
+    //     for (int i = 0; i < kNumSymbols; ++i) {
+    //         out[i] += src[i];
+    //     }
+    // }
 }
 
 void ansCalcWeights(
