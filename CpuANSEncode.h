@@ -19,13 +19,12 @@ __attribute__((target("avx2")))
 void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restrict localHist) {
     uint32_t roundUp = std::min(size, static_cast<uint32_t>(getAlignmentRoundUp(kAlign, in)));
     for (uint32_t i = 0; i < roundUp; ++i) {
-        ++localHist[in[i]];
+        ++localHist[in[i]]; 
     }
 
     const uint8_t* alignedIn = in + roundUp;
     uint32_t remaining = size - roundUp;
     uint32_t numChunks = remaining / kAlign;
-
     const __m256i* avxIn = reinterpret_cast<const __m256i*>(alignedIn);
     for (uint32_t i = 0; i < numChunks; ++i) {
         const __m256i vec = _mm256_load_si256(avxIn + i);
@@ -130,7 +129,7 @@ void ansHistogram(
     for (auto& thread : threads) {
         thread.join();
     }
-    
+  
     for (unsigned t = 0; t < numThreads; ++t) {
         const uint32_t* src = &histograms[t * kNumSymbols];
         #pragma omp simd aligned(src, out:64)
@@ -159,11 +158,6 @@ void ansCalcWeights(
         sortedPairs[i] = (qProb[i] << 16) | i;
         currentSum += qProb[i];
     }
-    printf("currentSum: %d\n", currentSum);
-
-    for(int i = 0; i < kNumSymbols; ++i)
-    printf("i: %d, counts: %d\n", i, counts[i]);
-
     // #pragma omp single
     // {
     //     __gnu_parallel::sort(
@@ -184,25 +178,10 @@ void ansCalcWeights(
         tidSymbol[i] = sortedPairs[i] & 0xFFFFU;
         qProb[i] = sortedPairs[i] >> 16;
     }
-    
-    for(int i = 0; i < kNumSymbols; ++i)
-    printf("i: %d, tidSymbol: %d, qProb: %d\n", i, tidSymbol[i], qProb[i]);
-
-    // #pragma omp parallel num_threads(32)
-    // {
-    //     int localSum = 0;
-    //     #pragma omp for schedule(static)
-    //     for (int i = 0; i < kNumSymbols; ++i) {
-    //         localSum += qProb[i];
-    //     }
-    //     #pragma omp atomic
-    //     currentSum += localSum;
-    // }
 
     int diff = static_cast<int>(kProbWeight) - currentSum;
 
     if (diff > 0) {
-      printf("diff: %d\n", diff);
       int iterToApply = std::min(diff, static_cast<int>(kNumSymbols));
       for(int i = diff; i > 0; i -= iterToApply){
         #pragma omp parallel for num_threads(32) schedule(static)
@@ -212,7 +191,6 @@ void ansCalcWeights(
       }
     }
     else{
-      printf("fucking\n");
       diff = -diff;
       while(diff > 0){
         int qNumGt1s = 0;
@@ -225,11 +203,6 @@ void ansCalcWeights(
         for(int j = startIndex; j < qNumGt1s; ++j){
           qProb[j] --;
         }
-        // for(int j = 0; j < kNumSymbols; ++j){
-        //   if(j >= startIndex && j < qNumGt1s){
-        //     qProb[j] -= 1;
-        //   }
-        // }
         diff -= iterToApply;
       }  
     }
@@ -238,8 +211,6 @@ void ansCalcWeights(
     for(int i = 0; i < kNumSymbols; i ++){
       symPdf[tidSymbol[i]] = qProb[i];
     }
-    for(int i = 0; i < kNumSymbols; ++i)
-    printf("i: %d, symPdf: %d\n", i, symPdf[i]);
     std::vector<uint16_t> cdf(kNumSymbols, 0);
     uint32_t pp = symPdf[0];
     probsOut[0] = pp;
@@ -257,8 +228,6 @@ void ansCalcWeights(
         magic = ((1ULL << 32) * ((1ULL << shift) - p)) / p + 1;
         cdf[i] = cdf[i-1] + symPdf[i-1];
         table[i] = {p, cdf[i], static_cast<uint32_t>(magic), shift};
-        //, uint16_t(one_bits - p)
-        // };
     }
 }
 
@@ -272,14 +241,11 @@ void ansEncodeBatch(
     uint32_t* compressedWords_dev,
     uint32_t* compressedWords_host_prefix,
     const uint4* table) {
-
     int num_threads = 16;
     #pragma omp parallel proc_bind(spread) num_threads(num_threads) 
     {
-    // int thread_id = omp_get_thread_num();
     #pragma omp for schedule(dynamic, 8)
     for(int l = 0; l < maxNumCompressedBlocks; ++l){
-    // for(int l = thread_id; l < maxNumCompressedBlocks; l += num_threads){
     uint32_t start = l * BlockSize;
     auto blockSize =  std::min(start + BlockSize, (uint32_t)inSize) - start;
 
@@ -297,7 +263,6 @@ void ansEncodeBatch(
       for (int j = 0; j < 8; ++j) {
         int idx1 = idx0 + (j << 5);
         #pragma unroll(16)
-        // #pragma omp simd
         for(int k = 0; k < kWarpSize; ++k){
           auto lookup = table[inBlock[k + idx1]];
           uint32_t pdf = lookup.x;
@@ -391,8 +356,7 @@ void ansEncode(
       inSize,\
       tempHistogram,\
       headerOut->getSymbolProbs(),\
-      table);  \
-        printf("1\n");                                                   \
+      table);                                                \
     ansEncodeBatch<ONEBITS, kDefaultBlockSize, kStateCheckMul>(\
             in,\
             inSize,                                        \
@@ -420,6 +384,7 @@ void ansEncode(
 
 #undef RUN_ENCODE
   uint32_t totalCompressedWords = 0;
+  // std::exclusive_scan(compressedWords_host, compressedWords_host + maxNumCompressedBlocks, compressedWordsPrefix_host, 0);
   if(maxNumCompressedBlocks > 0){
     std::exclusive_scan(compressedWords_host_prefix, compressedWords_host_prefix + maxNumCompressedBlocks, compressedWordsPrefix_host, 0);
     totalCompressedWords =
@@ -432,6 +397,7 @@ void ansEncode(
 
   *outSize = header.getTotalCompressedSize();
   *headerOut = header;
+  
 }
 } // namespace 
 
