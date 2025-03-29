@@ -101,7 +101,7 @@ __global__ void ansEncodeBatch(
     return;
   }
 
-  auto blockSize =  min(start + BlockSize, inSize_dev) - start;
+  uint32_t blockSize =  min(start + BlockSize, inSize_dev) - start;
 
   // Either the warp is an excess one, or the last block is not a full block and
   // needs to be processed using the partial 
