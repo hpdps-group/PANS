@@ -218,8 +218,8 @@ __global__ void ansEncodeCoalesceBatch(
       header.setTotalUncompressedWords(uncompressedWords);
       header.setTotalCompressedWords(totalCompressedWords);
       header.setProbBits(config_probBits);
-      if(tid == 0 && blockIdx.x == 0)
-      printf("header.setProbBits(config_probBits): %d\n",header.getProbBits());
+      // if(tid == 0 && blockIdx.x == 0)
+      // printf("header.setProbBits(config_probBits): %d\n",header.getProbBits());
 
       if (outSize_dev) {
         *outSize_dev = header.getTotalCompressedSize();
