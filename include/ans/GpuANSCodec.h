@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#ifndef MULTIBBYTE_ANS_INCLUDE_ANS_GPUANSUTILS_H
+#ifndef MULTIBYTE_ANS_INCLUDE_ANS_GPUANSUTILS_H
 #define MULTIBYTE_ANS_INCLUDE_ANS_GPUANSUTILS_H
 
 #pragma once
