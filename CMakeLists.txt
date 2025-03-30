@@ -13,7 +13,7 @@ if(OpenMP_FOUND)
 endif()
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -mavx2 -mavx512f -mavx512cd -mavx512vl -mavx512bw -fopenmp -march=native")
-
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -march=native")
 add_executable(cpuans_compress
   compress.cpp
 )
