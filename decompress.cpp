@@ -36,7 +36,7 @@ void decompressFileWithANS(
         decomp_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3; 
     }
     double dc_bw = ( 1.0 * totalCompressedSize / 1e9 ) / ( (decomp_time / 5.0) * 1e-3 );
-    std::cout << "decomp time " << std::fixed << std::setprecision(3) << (decomp_time / 5.0) << " ms B/W "   
+    std::cout << "decomp time " << std::fixed << std::setprecision(6) << (decomp_time / 5.0) << " ms B/W "   
                   << std::fixed << std::setprecision(1) << dc_bw << " GB/s" << std::endl;
     std::ofstream outFile(outputFilePath, std::ios::binary);
     outFile.write(reinterpret_cast<const char*>(decPtrs), batchSize*sizeof(uint8_t));

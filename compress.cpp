@@ -45,7 +45,7 @@ void compressFileWithANS(
         comp_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;  
     }
     double c_bw = ( 1.0 * fileSize / 1e9 ) / ( (comp_time / 5.0) * 1e-3 );  
-    std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time / 5.0 << " ms B/W "   
+    std::cout << "comp   time " << std::fixed << std::setprecision(6) << comp_time / 5.0 << " ms B/W "   
                   << std::fixed << std::setprecision(1) << c_bw << " GB/s " << std::endl;
     
     uint32_t outsize = *outCompressedSize;
