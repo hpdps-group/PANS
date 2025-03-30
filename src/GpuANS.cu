@@ -14,20 +14,40 @@
 namespace multibyte_ans {
 
 void ansEncodeBatch(
+    uint32_t maxNumcompressedWords,
+    uint32_t maxNumCompressedBlocks,
+    uint4* table_dev,
+    uint32_t* tempHistogram_dev,
+    uint32_t uncoalescedBlockStride,
+    uint8_t* compressedBlocks_dev,
+    uint32_t* compressedWords_dev,
+    uint32_t* compressedWordsPrefix_dev,
+    uint32_t sizeRequired,
+    uint8_t* tempPrefixSum_dev,
     int precision,
     uint8_t* in,
     uint32_t inSize,
     uint8_t* out,
     uint32_t* outSize,
     cudaStream_t stream) {
-
-  ansEncode(
-      precision,
-      in,
-      inSize,
-      out,
-      outSize,
-      stream);
+        
+    ansEncode(
+        maxNumcompressedWords,
+        maxNumCompressedBlocks,
+        table_dev,
+        tempHistogram_dev,
+        uncoalescedBlockStride,
+        compressedBlocks_dev,
+        compressedWords_dev,
+        compressedWordsPrefix_dev,
+        sizeRequired,
+        tempPrefixSum_dev,
+        precision,
+        in,
+        inSize,
+        out,
+        outSize,
+        stream);
 }
 
 void ansDecodeBatch(

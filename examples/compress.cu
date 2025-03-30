@@ -39,6 +39,35 @@ void compressFileWithANS(
     uint8_t* encPtrs;
     cudaMalloc(&encPtrs, static_cast<uint64_t>(getMaxCompressedSize(fileSize)));
 
+    uint32_t maxUncompressedWords = batchSize / sizeof(ANSDecodedT);
+    uint32_t maxNumCompressedBlocks =
+      (maxUncompressedWords + kDefaultBlockSize - 1) / kDefaultBlockSize;//一个batch的数据以kDefaultBlockSize作为基准划分数据，形成多个数据块
+
+    uint4* table_dev;
+    CUDA_VERIFY(cudaMalloc(&table_dev, sizeof(uint4) * kNumSymbols));
+
+    uint32_t* tempHistogram_dev;
+    CUDA_VERIFY(cudaMalloc(&tempHistogram_dev, sizeof(uint32_t) * kNumSymbols));
+
+    uint32_t uncoalescedBlockStride =
+      getMaxBlockSizeUnCoalesced(kDefaultBlockSize);
+
+    uint8_t* compressedBlocks_dev;
+    CUDA_VERIFY(cudaMalloc(&compressedBlocks_dev, sizeof(uint8_t) * maxNumCompressedBlocks * uncoalescedBlockStride));
+
+    uint32_t* compressedWords_dev;
+    CUDA_VERIFY(cudaMalloc(&compressedWords_dev, sizeof(uint32_t) * maxNumCompressedBlocks));
+
+    uint32_t* compressedWordsPrefix_dev;
+    CUDA_VERIFY(cudaMalloc(&compressedWordsPrefix_dev, sizeof(uint32_t) * maxNumCompressedBlocks));
+
+    auto sizeRequired =
+        getBatchExclusivePrefixSumTempSize(
+          maxNumCompressedBlocks);
+
+    uint8_t* tempPrefixSum_dev = nullptr;
+    CUDA_VERIFY(cudaMalloc(&tempPrefixSum_dev, sizeof(uint8_t) * sizeRequired));
+
     std::cout<<"encode start!"<<std::endl;
     //计时
     double time = 0.0;
@@ -47,6 +76,16 @@ void compressFileWithANS(
 
     //压缩开始 
     ansEncode(
+        maxUncompressedWords,
+        maxNumCompressedBlocks,
+        table_dev,
+        tempHistogram_dev,
+        uncoalescedBlockStride,
+        compressedBlocks_dev,
+        compressedWords_dev,
+        compressedWordsPrefix_dev,
+        sizeRequired,
+        tempPrefixSum_dev,
         precision,
         inPtrs,//已经在dev
         batchSize,
@@ -65,7 +104,7 @@ void compressFileWithANS(
     //计算速度
     double c_bw = ( 1.0 * fileSize / 1e9 ) / ( (time / 5.0) * 1e-3 );  
     //输出结果
-    std::cout << "comp   time " << std::fixed << std::setprecision(3) << (time / 5.0) << " ms B/W "   
+    std::cout << "comp   time " << std::fixed << std::setprecision(6) << (time / 5.0) << " ms B/W "   
                   << std::fixed << std::setprecision(1) << c_bw << " GB/s " << std::endl;
     
     //获取压缩后的数据大小

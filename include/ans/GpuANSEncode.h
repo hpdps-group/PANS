@@ -18,13 +18,12 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <chrono>
 
 namespace multibyte_ans {
 
 template <int ProbBits>
 __device__ __forceinline__ uint32_t encodeOne(
-    // true for the lanes in the warp for which data read is valid
-    bool valid,
     ANSStateT& state,
     ANSDecodedT sym,
     uint32_t outOffset,
@@ -40,7 +39,7 @@ __device__ __forceinline__ uint32_t encodeOne(
   constexpr ANSStateT kStateCheckMul = 1 << (kANSStateBits - ProbBits);
 
   ANSStateT maxStateCheck = pdf * kStateCheckMul;
-  bool write = valid && (state >= maxStateCheck);
+  bool write = state >= maxStateCheck;
 
   auto vote = __ballot_sync(0xffffffff, write);
   auto prefix = __popc(vote & getLaneMaskLt());
@@ -66,7 +65,59 @@ __device__ __forceinline__ uint32_t encodeOne(
 
   // calculating ((state / pdf) << ProbBits) + (state % pdf) + cdf
   constexpr uint32_t kProbBitsMul = 1 << ProbBits;
-  state = valid ? div * kProbBitsMul + mod + cdf : state;
+  state = div * kProbBitsMul + mod + cdf;
+
+  // how many values we actually write to the compressed output
+  return __popc(vote);
+}
+
+template <int ProbBits>
+__device__ __forceinline__ uint32_t encodeOnePartial(
+    // true for the lanes in the warp for which data read is valid
+    bool valid,
+    ANSStateT& state,
+    ANSDecodedT sym,
+    uint32_t outOffset,
+    ANSEncodedT* __restrict__ outWords,
+    const uint4* __restrict__ table) {
+  if(!valid) return 0;
+  auto lookup = table[sym];
+
+  uint32_t pdf = lookup.x;
+  uint32_t cdf = lookup.y;
+  uint32_t div_m1 = lookup.z;
+  uint32_t div_shift = lookup.w;
+
+  constexpr ANSStateT kStateCheckMul = 1 << (kANSStateBits - ProbBits);
+
+  ANSStateT maxStateCheck = pdf * kStateCheckMul;
+  bool write = (state >= maxStateCheck);
+
+  auto vote = __ballot_sync(0xffffffff, write);
+  auto prefix = __popc(vote & getLaneMaskLt());
+
+  // Some lanes wish to write out their data
+  if (write) {
+    outWords[outOffset + prefix] = state & kANSEncodedMask;
+    state >>= kANSEncodedBits;
+  }
+
+  uint32_t t = __umulhi(state, div_m1);
+  //__umulhi 通常是一个内联汇编函数或者内置函数，
+  //用于计算两个无符号整数相乘的结果，并且只返回乘积的高半部分（即更显著的位）。
+  //这种操作在某些低级编程或者性能敏感的代码中很有用，
+  //因为它可以避免处理整个乘积，从而节省空间和时间。
+  
+  // We prevent addition overflow here by restricting `state` to < 2^31
+  // (kANSStateBits)
+  uint32_t div = (t + state) >> div_shift;
+  //div = (__umulhi(state, div_m1) + state) >> div_shift 
+  //= state / div然后向下取整
+  auto mod = state - (div * pdf);
+
+  // calculating ((state / pdf) << ProbBits) + (state % pdf) + cdf
+  constexpr uint32_t kProbBitsMul = 1 << ProbBits;
+  state = div * kProbBitsMul + mod + cdf;
 
   // how many values we actually write to the compressed output
   return __popc(vote);
@@ -132,7 +183,7 @@ __global__ void ansEncodeBatch(
 #pragma unroll
       for (int j = 0; j < kUnroll; ++j) {
         outOffset +=
-            encodeOne<ProbBits>(true, state, inBlock[inOffset + j * kWarpSize], outOffset, outWords, smemLookup);
+            encodeOne<ProbBits>(state, inBlock[inOffset + j * kWarpSize], outOffset, outWords, smemLookup);
       }
     }
   }
@@ -143,13 +194,13 @@ __global__ void ansEncodeBatch(
 
     for (; inOffset < limit; inOffset += kWarpSize) {
       outOffset +=
-          encodeOne<ProbBits>(true, state, inBlock[inOffset], outOffset, outWords, smemLookup);
+          encodeOne<ProbBits>(state, inBlock[inOffset], outOffset, outWords, smemLookup);
     }
     //valid = false;
     if (limit != blockSize) {
       bool valid = inOffset < blockSize;
       ANSDecodedT sym = valid ? inBlock[inOffset] : ANSDecodedT(0);
-      outOffset += encodeOne<ProbBits>(
+      outOffset += encodeOnePartial<ProbBits>(
           valid, state, sym, outOffset, outWords, smemLookup);
     }
   }
@@ -231,6 +282,7 @@ __global__ void ansEncodeCoalesceBatch(
     auto probsOut = headerOut->getSymbolProbs();
 
     // Write out pdf
+    #pragma unroll
     for (int i = tid; i < kNumSymbols; i += Threads) {
       probsOut[i] = table_dev[i].x;
     }
@@ -284,6 +336,16 @@ __global__ void ansEncodeCoalesceBatch(
 }
 
 void ansEncode(
+    uint32_t maxUncompressedWords,
+    uint32_t maxNumCompressedBlocks,
+    uint4* table_dev,
+    uint32_t* tempHistogram_dev,
+    uint32_t uncoalescedBlockStride,
+    uint8_t* compressedBlocks_dev,
+    uint32_t* compressedWords_dev,
+    uint32_t* compressedWordsPrefix_dev,
+    uint32_t sizeRequired,
+    uint8_t* tempPrefixSum_dev,
     int precision,
     uint8_t* in,
     uint32_t inSize,
@@ -291,47 +353,64 @@ void ansEncode(
     uint32_t* outSize,
     cudaStream_t stream) {
 
-  uint32_t maxUncompressedWords = inSize / sizeof(ANSDecodedT);
-  uint32_t maxNumCompressedBlocks =
-      (maxUncompressedWords + kDefaultBlockSize - 1) / kDefaultBlockSize;//一个batch的数据以kDefaultBlockSize作为基准划分数据，形成多个数据块
+  // uint32_t maxUncompressedWords = inSize / sizeof(ANSDecodedT);
+  // uint32_t maxNumCompressedBlocks =
+  //     (maxUncompressedWords + kDefaultBlockSize - 1) / kDefaultBlockSize;//一个batch的数据以kDefaultBlockSize作为基准划分数据，形成多个数据块
 
-  uint4* table_dev;
-  CUDA_VERIFY(cudaMalloc(&table_dev, sizeof(uint4) * kNumSymbols));
+  // uint4* table_dev;
+  // CUDA_VERIFY(cudaMalloc(&table_dev, sizeof(uint4) * kNumSymbols));
 
-  uint32_t* tempHistogram_dev;
-  CUDA_VERIFY(cudaMalloc(&tempHistogram_dev, sizeof(uint32_t) * kNumSymbols));
-
+  // uint32_t* tempHistogram_dev;
+  // CUDA_VERIFY(cudaMalloc(&tempHistogram_dev, sizeof(uint32_t) * kNumSymbols));
+// {
+// auto start = std::chrono::high_resolution_clock::now();   
   ansHistogramBatch(
       in,
       inSize,
       tempHistogram_dev, 
       stream);
-
+// cudaStreamSynchronize(stream);
+// auto end = std::chrono::high_resolution_clock::now();
+// double time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
+// printf("histgram kernel: %f\n", time);
+// }
+// {
+// auto start = std::chrono::high_resolution_clock::now();  
   ansCalcWeights(
       precision,
       inSize,
       tempHistogram_dev,
       table_dev,
       stream);
-  
-  uint32_t uncoalescedBlockStride =
-      getMaxBlockSizeUnCoalesced(kDefaultBlockSize);
+// cudaStreamSynchronize(stream);
+// auto end = std::chrono::high_resolution_clock::now();
+// double time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
+// printf("weight kernel: %f\n", time);
+// }
 
-  uint8_t* compressedBlocks_dev;
-  CUDA_VERIFY(cudaMalloc(&compressedBlocks_dev, sizeof(uint8_t) * maxNumCompressedBlocks * uncoalescedBlockStride));
+// auto start = std::chrono::high_resolution_clock::now();  
+  // uint32_t uncoalescedBlockStride =
+  //     getMaxBlockSizeUnCoalesced(kDefaultBlockSize);
 
-  uint32_t* compressedWords_dev;
-  CUDA_VERIFY(cudaMalloc(&compressedWords_dev, sizeof(uint32_t) * maxNumCompressedBlocks));
+  // uint8_t* compressedBlocks_dev;
+  // CUDA_VERIFY(cudaMalloc(&compressedBlocks_dev, sizeof(uint8_t) * maxNumCompressedBlocks * uncoalescedBlockStride));
 
-  uint32_t* compressedWordsPrefix_dev;
-  CUDA_VERIFY(cudaMalloc(&compressedWordsPrefix_dev, sizeof(uint32_t) * maxNumCompressedBlocks));
+  // uint32_t* compressedWords_dev;
+  // CUDA_VERIFY(cudaMalloc(&compressedWords_dev, sizeof(uint32_t) * maxNumCompressedBlocks));
+
+  // uint32_t* compressedWordsPrefix_dev;
+  // CUDA_VERIFY(cudaMalloc(&compressedWordsPrefix_dev, sizeof(uint32_t) * maxNumCompressedBlocks));
+// cudaStreamSynchronize(stream);
+// auto end = std::chrono::high_resolution_clock::now();
+// double time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
+// printf("malloc kernel: %f\n", time);
 
   if (maxNumCompressedBlocks > 0) {
     constexpr int kThreads = 256;//一个block256线程，4个warp
 
     auto gridFull = dim3(
         ((int)maxNumCompressedBlocks + (kThreads / kWarpSize)) / (kThreads / kWarpSize), 1);
-
+// auto start = std::chrono::high_resolution_clock::now();   
 #define RUN_ENCODE(BITS)                                       \
   do {                                                         \
     ansEncodeBatch<BITS, kDefaultBlockSize>    \
@@ -360,14 +439,19 @@ void ansEncode(
     }
 
 #undef RUN_ENCODE
+// cudaStreamSynchronize(stream);
+// auto end = std::chrono::high_resolution_clock::now();
+// double time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
+// printf("encoder kernel: %f\n", time);
   }
-
   if (maxNumCompressedBlocks > 0) {
-    auto sizeRequired =
-        getBatchExclusivePrefixSumTempSize(
-          maxNumCompressedBlocks);
-    uint8_t* tempPrefixSum_dev = nullptr;
-    CUDA_VERIFY(cudaMalloc(&tempPrefixSum_dev, sizeof(uint8_t) * sizeRequired));
+// {
+// auto start = std::chrono::high_resolution_clock::now(); 
+    // auto sizeRequired =
+    //     getBatchExclusivePrefixSumTempSize(
+    //       maxNumCompressedBlocks);
+    // uint8_t* tempPrefixSum_dev = nullptr;
+    // CUDA_VERIFY(cudaMalloc(&tempPrefixSum_dev, sizeof(uint8_t) * sizeRequired));
     batchExclusivePrefixSum<uint32_t, Align<ANSEncodedT, kBlockAlignment>>(
         compressedWords_dev,
         compressedWordsPrefix_dev,
@@ -375,9 +459,15 @@ void ansEncode(
         maxNumCompressedBlocks,
         Align<ANSEncodedT, kBlockAlignment>(),
         stream);
+// cudaStreamSynchronize(stream);
+// auto end = std::chrono::high_resolution_clock::now();
+// double time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
+// printf("prefix kernel: %f\n", time);
+//   }
   }
   
   {
+// auto start = std::chrono::high_resolution_clock::now(); 
     constexpr int kThreads = 64;
     auto grid = dim3(std::max(maxNumCompressedBlocks, 1U), 1);
 
@@ -394,10 +484,13 @@ void ansEncode(
             precision,
             out,
             outSize);
-
+// cudaStreamSynchronize(stream);
+// auto end = std::chrono::high_resolution_clock::now();
+// double time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
+// printf("Coalesce kernel: %f\n\n", time);
   }
 
-  CUDA_TEST_ERROR();
+  // CUDA_TEST_ERROR();
 }
 
 } // namespace 
