@@ -36,6 +36,8 @@ void decompressFileWithANS(
     
     std::cout<<"decode start!"<<std::endl;
     double decomp_time = 0.0;
+    double time = 0.0;
+    for(int i = 0; i < 11; i ++){
     auto start = std::chrono::high_resolution_clock::now();
 
     //解压开始
@@ -48,11 +50,16 @@ void decompressFileWithANS(
     //printf("1\n");
     auto end = std::chrono::high_resolution_clock::now();  
     decomp_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3; 
+    if(i > 5)
+    {
+        time += decomp_time;
+    }
+    }
     
     //计算速度
-    double dc_bw = ( 1.0 * compressedSize / 1e9 ) / ( decomp_time * 1e-3 );
+    double dc_bw = ( 1.0 * compressedSize / 1e9 ) / ( (time / 5.0) * 1e-3 );
     //输出结果
-    std::cout << "decomp time " << std::fixed << std::setprecision(3) << decomp_time << " ms B/W "   
+    std::cout << "decomp time " << std::fixed << std::setprecision(3) << (time / 5.0) << " ms B/W "   
                   << std::fixed << std::setprecision(1) << dc_bw << " GB/s" << std::endl;
     //保存解压后的文件到outputFilePath
     std::ofstream outFile(outputFilePath, std::ios::binary);
