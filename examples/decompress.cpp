@@ -59,7 +59,7 @@ void decompressFileWithANS(
     //计算速度
     double dc_bw = ( 1.0 * compressedSize / 1e9 ) / ( (time / 5.0) * 1e-3 );
     //输出结果
-    std::cout << "decomp time " << std::fixed << std::setprecision(3) << time / 5.0 << " ms B/W "   
+    std::cout << "decomp time " << std::fixed << std::setprecision(6) << time / 5.0 << " ms B/W "   
                   << std::fixed << std::setprecision(1) << dc_bw << " GB/s" << std::endl;
     //保存解压后的文件到outputFilePath
     std::ofstream outFile(outputFilePath, std::ios::binary);
