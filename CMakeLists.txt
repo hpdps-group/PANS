@@ -76,9 +76,9 @@ target_include_directories(gpu_ans
 )
 
 add_executable(cudaans_compress examples/compress.cu)
-target_link_libraries(compress
+target_link_libraries(cudaans_compress
         gpu_ans)
 
 add_executable(cudaans_decompress examples/decompress.cu)
-target_link_libraries(decompress
+target_link_libraries(cudaans_decompress
         gpu_ans)
