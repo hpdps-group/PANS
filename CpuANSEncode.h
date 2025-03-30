@@ -14,7 +14,10 @@
 namespace cpu_ans {
 
 constexpr uint32_t kAlign = 32;
-
+uint32_t umulhi(uint32_t a, uint32_t b) {
+    uint64_t product = (uint64_t)a * (uint64_t)b;
+    return (uint32_t)(product >> 32);
+}
 __attribute__((target("avx2")))
 void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restrict localHist) {
     uint32_t roundUp = std::min(size, static_cast<uint32_t>(getAlignmentRoundUp(kAlign, in)));
