@@ -367,7 +367,9 @@ __device__ void normalizeProbabilitiesFromHistogram(
     //使用__clz指令后，
     //会返回这个数值最高位之前的零的数量，即3
     constexpr uint64_t one = 1;
-    uint64_t magic64 =
+    uint64_t magic64 = 0;
+    if(symPdf[i]!=0)
+    magic64 =
         ((one << 32) * ((one << shift[i]) - symPdf[i])) / symPdf[i] + 1;
 
     // should not overflow
