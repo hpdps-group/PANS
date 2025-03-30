@@ -25,15 +25,18 @@ void decompressFileWithANS(
     uint8_t* decPtrs = (uint8_t*)malloc(sizeof(uint8_t)*(batchSize));
     std::cout<<"decode start!"<<std::endl;
     double decomp_time = 0.0;
+    for(int i = 0; i < 11; i ++){
     auto start = std::chrono::high_resolution_clock::now();
     ansDecode(
         precision,
         fileCompressedData.data(),
         decPtrs);
     auto end = std::chrono::high_resolution_clock::now();  
-    decomp_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3; 
-    double dc_bw = ( 1.0 * totalCompressedSize / 1e9 ) / ( decomp_time * 1e-3 );
-    std::cout << "decomp time " << std::fixed << std::setprecision(3) << decomp_time << " ms B/W "   
+    if(i > 5)
+        decomp_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3; 
+    }
+    double dc_bw = ( 1.0 * totalCompressedSize / 1e9 ) / ( (decomp_time / 5.0) * 1e-3 );
+    std::cout << "decomp time " << std::fixed << std::setprecision(3) << (decomp_time / 5.0) << " ms B/W "   
                   << std::fixed << std::setprecision(1) << dc_bw << " GB/s" << std::endl;
     std::ofstream outFile(outputFilePath, std::ios::binary);
     outFile.write(reinterpret_cast<const char*>(decPtrs), batchSize*sizeof(uint8_t));

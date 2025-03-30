@@ -29,6 +29,8 @@ void compressFileWithANS(
     uint8_t* encPtrs = (uint8_t*)malloc(getMaxCompressedSize(fileSize));
 
     std::cout<<"encode start!"<<std::endl;
+    double comp_time = 0.0;
+    for(int i = 0; i < 11; i ++){
     auto start = std::chrono::high_resolution_clock::now();  
 
     ansEncode(
@@ -39,9 +41,11 @@ void compressFileWithANS(
         outCompressedSize);
 
     auto end = std::chrono::high_resolution_clock::now();
-    double comp_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;  
-    double c_bw = ( 1.0 * fileSize / 1e9 ) / ( comp_time * 1e-3 );  
-    std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time << " ms B/W "   
+    if(i > 5)
+        comp_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;  
+    }
+    double c_bw = ( 1.0 * fileSize / 1e9 ) / ( (comp_time / 5.0) * 1e-3 );  
+    std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time / 5.0 << " ms B/W "   
                   << std::fixed << std::setprecision(1) << c_bw << " GB/s " << std::endl;
     
     uint32_t outsize = *outCompressedSize;
