@@ -71,7 +71,7 @@ void processBlock(const uint8_t* in, uint32_t size, uint32_t* localHist) {
     }
 }
 
-void ansHistogram_v0(
+void ansHistogram(
     const uint8_t* in,
     uint32_t size,
     uint32_t* out,
