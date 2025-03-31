@@ -18,127 +18,58 @@ uint32_t umulhi(uint32_t a, uint32_t b) {
     uint64_t product = (uint64_t)a * (uint64_t)b;
     return (uint32_t)(product >> 32);
 }
-__attribute__((target("avx2")))
-void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restrict localHist) {
-    uint32_t roundUp = std::min(size, static_cast<uint32_t>(getAlignmentRoundUp(kAlign, in)));
-    for (uint32_t i = 0; i < roundUp; ++i) {
-        ++localHist[in[i]];
-    }
-    const uint8_t* alignedIn = in + roundUp;
-    uint32_t remaining = size - roundUp;
-    uint32_t numChunks = remaining / kAlign;
-    const __m256i* avxIn = reinterpret_cast<const __m256i*>(alignedIn);
-    for (uint32_t i = 0; i < numChunks; ++i) {
-        const __m256i vec = _mm256_load_si256(avxIn + i);
-        const uint8_t* bytes = reinterpret_cast<const uint8_t*>(avxIn + i);
-        _mm_prefetch(reinterpret_cast<const char*>(avxIn + i + 1), _MM_HINT_T0);
 
-        uint32_t v0 = bytes[0], v1 = bytes[1], v2 = bytes[2], v3 = bytes[3];
-        uint32_t v4 = bytes[4], v5 = bytes[5], v6 = bytes[6], v7 = bytes[7];
-        ++localHist[v0]; ++localHist[v1]; ++localHist[v2]; ++localHist[v3];
-        ++localHist[v4]; ++localHist[v5]; ++localHist[v6]; ++localHist[v7];
-
-        uint32_t v8 = bytes[8], v9 = bytes[9], v10 = bytes[10], v11 = bytes[11];
-        uint32_t v12 = bytes[12], v13 = bytes[13], v14 = bytes[14], v15 = bytes[15];
-        ++localHist[v8]; ++localHist[v9]; ++localHist[v10]; ++localHist[v11];
-        ++localHist[v12]; ++localHist[v13]; ++localHist[v14]; ++localHist[v15];
-
-        uint32_t v16 = bytes[16], v17 = bytes[17], v18 = bytes[18], v19 = bytes[19];
-        uint32_t v20 = bytes[20], v21 = bytes[21], v22 = bytes[22], v23 = bytes[23];
-        ++localHist[v16]; ++localHist[v17]; ++localHist[v18]; ++localHist[v19];
-        ++localHist[v20]; ++localHist[v21]; ++localHist[v22]; ++localHist[v23];
-
-        uint32_t v24 = bytes[24], v25 = bytes[25], v26 = bytes[26], v27 = bytes[27];
-        uint32_t v28 = bytes[28], v29 = bytes[29], v30 = bytes[30], v31 = bytes[31];
-        ++localHist[v24]; ++localHist[v25]; ++localHist[v26]; ++localHist[v27];
-        ++localHist[v28]; ++localHist[v29]; ++localHist[v30]; ++localHist[v31];
-    }
-
-    const uint8_t* tail = alignedIn + numChunks * kAlign;
-    uint32_t remainingTail = remaining % kAlign;
-    
-    if (remainingTail >= 8) {
-        const uint8_t* chunk = tail;
-        ++localHist[chunk[0]]; ++localHist[chunk[1]]; 
-        ++localHist[chunk[2]]; ++localHist[chunk[3]];
-        ++localHist[chunk[4]]; ++localHist[chunk[5]];
-        ++localHist[chunk[6]]; ++localHist[chunk[7]];
-        tail += 8;
-        remainingTail -= 8;
-    }
-    switch (remainingTail) {
-        case 7: ++localHist[tail[6]];
-        case 6: ++localHist[tail[5]];
-        case 5: ++localHist[tail[4]];
-        case 4: ++localHist[tail[3]];
-        case 3: ++localHist[tail[2]];
-        case 2: ++localHist[tail[1]];
-        case 1: ++localHist[tail[0]];
-        default: break;
-    }
+template <size_t Align>
+inline uint32_t getAlignmentRoundUp(const void* ptr) {
+  const auto address = reinterpret_cast<size_t>(ptr);
+  return (Align - (address % Align)) % Align;
 }
 
 void ansHistogram(
-    const uint8_t* __restrict in,
+    const uint8_t* input,
     uint32_t size,
-    uint32_t* __restrict out,
-    bool multithread = true) {
-
-    std::memset(out, 0, kNumSymbols * sizeof(uint32_t));
-    for(int i = 0; i < size; i ++){
-      out[in[i]]++;
+    uint32_t* histogram) 
+{
+  constexpr size_t kBatchSize = 4096;
+  std::vector<std::atomic<uint32_t>> atomic_counts(kNumSymbols);
+  auto worker = [&](size_t start_idx, size_t end_idx) {
+    uint32_t local_counts[kNumSymbols] = {0};
+    const uint32_t align_offset = getAlignmentRoundUp<sizeof(uint64_t)>(input);
+    const size_t aligned_start = std::min(end_idx, start_idx + align_offset);
+    for (size_t i = start_idx; i < aligned_start; ++i) {
+      ++local_counts[input[i]];
     }
-    // if (size < 100000 || !multithread) {
-    //     alignas(64) uint32_t localHist[kNumSymbols] = {0};
-    //     processBlock(in, size, localHist);
-    //     for (int i = 0; i < kNumSymbols; i += 8) {
-    //         _mm256_store_si256(
-    //             reinterpret_cast<__m256i*>(out + i),
-    //             _mm256_add_epi32(
-    //                 _mm256_load_si256(reinterpret_cast<const __m256i*>(out + i)),
-    //                 _mm256_load_si256(reinterpret_cast<const __m256i*>(localHist + i))
-    //             )
-    //         );
-    //     }
-    //     return;
-    // }
-
-    // const unsigned numThreads = std::thread::hardware_concurrency();
-    // std::vector<std::thread> threads;
-    // alignas(64) std::vector<uint32_t> histograms(numThreads * kNumSymbols, 0);
-
-    // const uint32_t blockSize = (size + numThreads * 4 - 1) / (numThreads * 4);
-    // std::atomic<uint32_t> currentBlock(0);
-
-    // for (unsigned t = 0; t < numThreads; ++t) {
-    //     threads.emplace_back([&, t]() {
-    //         cpu_set_t cpuset;
-    //         CPU_ZERO(&cpuset);
-    //         CPU_SET(t % numThreads, &cpuset);
-    //         pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-
-    //         uint32_t* localHist = &histograms[t * kNumSymbols];
-    //         while (true) {
-    //             const uint32_t blockIdx = currentBlock.fetch_add(1);
-    //             const uint32_t start = blockIdx * blockSize;
-    //             if (start >= size) break;
-    //             const uint32_t end = std::min(start + blockSize, size);
-    //             processBlock(in + start, end - start, localHist);
-    //         }
-    //     });
-    // }
-
-    // for (auto& thread : threads) {
-    //     thread.join();
-    // }
-    
-    // for (unsigned t = 0; t < numThreads; ++t) {
-    //     const uint32_t* src = &histograms[t * kNumSymbols];
-    //     #pragma omp simd aligned(src, out:64)
-    //     for (int i = 0; i < kNumSymbols; ++i) {
-    //         out[i] += src[i];
-    //     }
-    // }
+    const uint64_t* aligned_ptr = reinterpret_cast<const uint64_t*>(
+        input + align_offset);
+    const size_t vector_items = (end_idx - aligned_start) / sizeof(uint64_t);
+    for (size_t i = 0; i < vector_items; ++i) {
+      uint64_t packed = aligned_ptr[i];
+      for (int shift = 0; shift < 64; shift += 8) {
+        ++local_counts[(packed >> shift) & 0xFF];
+      }
+    }
+    const size_t tail_start = aligned_start + vector_items * sizeof(uint64_t);
+    for (size_t i = tail_start; i < end_idx; ++i) {
+      ++local_counts[input[i]];
+    }
+    for (int k = 0; k < kNumSymbols; ++k) {
+      if (local_counts[k] > 0) {
+        atomic_counts[k].fetch_add(local_counts[k], std::memory_order_relaxed);
+      }
+    }
+  };
+  const size_t num_workers = std::thread::hardware_concurrency();
+  std::vector<std::thread> workers;
+  const size_t chunk_size = (size + num_workers - 1) / num_workers;
+  for (size_t t = 0; t < num_workers; ++t) {
+    const size_t start = t * chunk_size;
+    const size_t end = std::min(start + chunk_size, static_cast<size_t>(size));
+    workers.emplace_back(worker, start, end);
+  }
+  for (auto& w : workers) w.join();
+  for (int k = 0; k < kNumSymbols; ++k) {
+    histogram[k] = atomic_counts[k].load();
+  }
 }
 
 void ansCalcWeights(
