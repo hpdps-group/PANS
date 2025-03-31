@@ -79,7 +79,7 @@ void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restr
     }
 }
 
-void ansHistogram(
+void ansHistogram_v0(
     const uint8_t* __restrict in,
     uint32_t size,
     uint32_t* __restrict out,
@@ -142,6 +142,59 @@ void ansHistogram(
             out[i] += src[i];
         }
     }
+}
+
+template <size_t Align>
+inline uint32_t getAlignmentRoundUp(const void* ptr) {
+  const auto address = reinterpret_cast<size_t>(ptr);
+  return (Align - (address % Align)) % Align;
+}
+
+void ansHistogram_v1(
+    const uint8_t* input,
+    uint32_t size,
+    uint32_t* histogram) 
+{
+  constexpr size_t kBatchSize = 4096;
+  std::vector<std::atomic<uint32_t>> atomic_counts(kNumSymbols);
+  auto worker = [&](size_t start_idx, size_t end_idx) {
+    uint32_t local_counts[kNumSymbols] = {0};
+    const uint32_t align_offset = getAlignmentRoundUp<sizeof(uint64_t)>(input);
+    const size_t aligned_start = std::min(end_idx, start_idx + align_offset);
+    for (size_t i = start_idx; i < aligned_start; ++i) {
+      ++local_counts[input[i]];
+    }
+    const uint64_t* aligned_ptr = reinterpret_cast<const uint64_t*>(
+        input + align_offset);
+    const size_t vector_items = (end_idx - aligned_start) / sizeof(uint64_t);
+    for (size_t i = 0; i < vector_items; ++i) {
+      uint64_t packed = aligned_ptr[i];
+      for (int shift = 0; shift < 64; shift += 8) {
+        ++local_counts[(packed >> shift) & 0xFF];
+      }
+    }
+    const size_t tail_start = aligned_start + vector_items * sizeof(uint64_t);
+    for (size_t i = tail_start; i < end_idx; ++i) {
+      ++local_counts[input[i]];
+    }
+    for (int k = 0; k < kNumSymbols; ++k) {
+      if (local_counts[k] > 0) {
+        atomic_counts[k].fetch_add(local_counts[k], std::memory_order_relaxed);
+      }
+    }
+  };
+  const size_t num_workers = std::thread::hardware_concurrency();
+  std::vector<std::thread> workers;
+  const size_t chunk_size = (size + num_workers - 1) / num_workers;
+  for (size_t t = 0; t < num_workers; ++t) {
+    const size_t start = t * chunk_size;
+    const size_t end = std::min(start + chunk_size, static_cast<size_t>(size));
+    workers.emplace_back(worker, start, end);
+  }
+  for (auto& w : workers) w.join();
+  for (int k = 0; k < kNumSymbols; ++k) {
+    histogram[k] = atomic_counts[k].load();
+  }
 }
 
 template <int one_bits, int kStateCheckMul>
@@ -551,7 +604,7 @@ void ansEncode(
   uint4* table = (uint4*)malloc(sizeof(uint4) * kNumSymbols);
   uint32_t* tempHistogram = (uint32_t*)malloc(sizeof(uint32_t) * kNumSymbols);
   // auto start = std::chrono::high_resolution_clock::now();
-  ansHistogram(
+  ansHistogram_v0(
       in,
       inSize,
       tempHistogram);
