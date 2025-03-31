@@ -42,6 +42,8 @@ void compressFileWithANS(
     uint32_t* compressedWords_host_prefix = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
     uint32_t* compressedWordsPrefix_host = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
     std::cout<<"encode start!"<<std::endl;
+    double comp_time = 0.0;
+    for(int i = 0; i < 11; i ++){
     auto start = std::chrono::high_resolution_clock::now();  
 
     ansEncode(
@@ -61,9 +63,11 @@ void compressFileWithANS(
         compressedWordsPrefix_host);
 
     auto end = std::chrono::high_resolution_clock::now();
-    double comp_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;  
-    double c_bw = ( 1.0 * fileSize / 1e6 ) / ( comp_time * 1e-3 );  
-    std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time << " ms B/W "   
+    if(i > 5)
+        comp_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
+    }  
+    double c_bw = ( 1.0 * fileSize / 1e6 ) / ( (comp_time / 5.0)* 1e-3 );  
+    std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time / 5.0 << " ms B/W "   
                   << std::fixed << std::setprecision(1) << c_bw << " MB/s " << std::endl;
 
     std::ofstream outputFile(tempFilePath, std::ios::binary);
