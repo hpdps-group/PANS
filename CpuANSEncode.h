@@ -30,7 +30,6 @@ void ansHistogram(
     uint32_t size,
     uint32_t* histogram) 
 {
-  constexpr size_t kBatchSize = 4096;
   std::vector<std::atomic<uint32_t>> atomic_counts(kNumSymbols);
   auto worker = [&](size_t start_idx, size_t end_idx) {
     uint32_t local_counts[kNumSymbols] = {0};
