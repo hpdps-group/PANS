@@ -227,7 +227,9 @@ void ansCalcWeights(
     for (int i = 1; i < kNumSymbols; ++i) {
         uint32_t p = symPdf[i];
         uint32_t shift = 32 - __builtin_clz(p - 1);
-        uint64_t magic = ((1ULL << 32) * ((1ULL << shift) - p)) / p + 1;
+        uint64_t magic = 0.0;
+        if(p != 0)
+          magic = ((1ULL << 32) * ((1ULL << shift) - p)) / p + 1;
         cdf[i] = cdf[i-1] + symPdf[i-1];
         table[i] = {p, cdf[i], static_cast<uint32_t>(magic), shift};
     }
