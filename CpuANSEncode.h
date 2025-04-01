@@ -377,7 +377,6 @@ void ansEncodeBatch_v1(
     uint32_t* compressedWords_dev,
     uint32_t* compressedWords_host_prefix,
     const uint4* table) {
-    // 使用编译器指令启用SIMD优化
     #pragma omp parallel proc_bind(close) num_threads(omp_get_max_threads())
     {
         #pragma omp for schedule(dynamic, 8)
@@ -389,7 +388,6 @@ void ansEncodeBatch_v1(
             auto outBlock = (ANSWarpState*)(compressedBlocks_dev + l * uncoalescedBlockStride);
             ANSEncodedT* outWords = (ANSEncodedT*)(outBlock + 1);
             
-            // 使用__restrict__关键字减少别名检查
             uint64_t* __restrict__ state = new uint64_t[kWarpSize];
             std::fill_n(state, kWarpSize, kANSStartState);
 
@@ -397,7 +395,6 @@ void ansEncodeBatch_v1(
             uint32_t limit = roundDown(blockSize, 256);
             int cyclenum0 = limit >> 8;
 
-            // 使用SIMD指令和循环展开优化
             for (int i = 0; i < cyclenum0; ++i) {
                 int idx0 = i << 8;
                 #pragma unroll(8)
@@ -417,7 +414,6 @@ void ansEncodeBatch_v1(
                 }
             }
 
-            // 处理剩余部分
             if (blockSize - limit) {
                 uint32_t limit1 = roundDown(blockSize, kWarpSize);
                 int cyclenum1 = (limit1 - limit) / kWarpSize;
@@ -453,7 +449,6 @@ void ansEncodeBatch_v1(
                 }
             }
 
-            // 使用SIMD指令存储结果
             #pragma omp simd
             for(int i = 0; i < kWarpSize; ++i) {
                 outBlock->warpState[i] = state[i];
@@ -494,7 +489,6 @@ void ansEncodeBatch_v3(
             uint32_t limit = roundDown(blockSize, 256);
             int cyclenum0 = limit >> 8;
 
-            // 使用C++标准库函数优化内存操作
             for (int i = 0; i < cyclenum0; ++i) {
                 int idx0 = i << 8;
                 for (int j = 0; j < 8; ++j) {
@@ -548,7 +542,6 @@ void ansEncodeBatch_v3(
                 }
             }
 
-            // 使用SIMD指令存储结果
             #pragma omp simd
             for(int i = 0; i < kWarpSize; ++i) {
                 outBlock->warpState[i] = state[i];
