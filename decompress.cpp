@@ -48,6 +48,9 @@ void decompressFileWithANS(
     outFile.write(reinterpret_cast<const char*>(decPtrs), batchSize*sizeof(uint8_t));
     outFile.close();
     free(decPtrs);
+    free(symbol);
+    free(pdf);
+    free(cdf);
     decPtrs = NULL;
 }
 

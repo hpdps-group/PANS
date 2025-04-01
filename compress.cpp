@@ -64,9 +64,9 @@ void compressFileWithANS(
 
     auto end = std::chrono::high_resolution_clock::now();
     if(i > 5)
-        comp_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
-    }  
-    double c_bw = ( 1.0 * fileSize / 1e6 ) / ( (comp_time / 5.0)* 1e-3 );  
+      comp_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;  
+    }
+    double c_bw = ( 1.0 * fileSize / 1e6 ) / ( (comp_time / 5.0) * 1e-3 );  
     std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time / 5.0 << " ms B/W "   
                   << std::fixed << std::setprecision(1) << c_bw << " MB/s " << std::endl;
 
@@ -132,6 +132,14 @@ void compressFileWithANS(
 
     // outputFile.write(reinterpret_cast<const char*>(encPtrs), outsize*sizeof(uint8_t));
     outputFile.close();
+    free(outCompressedSize);
+    free(encPtrs);
+    free(table);
+    free(tempHistogram);
+    free(compressedBlocks_host);
+    free(compressedWords_host);
+    free(compressedWords_host_prefix);
+    free(compressedWordsPrefix_host);
 }
 
 int main(int argc, char* argv[]) {
