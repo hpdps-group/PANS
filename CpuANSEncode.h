@@ -249,14 +249,14 @@ void ansCalcWeights(
 
 template <int one_bits, int BlockSize, int kStateCheckMul>
 void ansEncodeBatch_v0(
-    uint8_t* in,
+    uint8_t* __restrict__ in,
     int inSize,
-    uint32_t maxNumCompressedBlocks,
-    uint32_t uncoalescedBlockStride,
-    uint8_t* compressedBlocks_dev,
-    uint32_t* compressedWords_dev,
-    uint32_t* compressedWords_host_prefix,
-    const uint4* table) {
+    uint32_t __restrict__ maxNumCompressedBlocks,
+    uint32_t __restrict__ uncoalescedBlockStride,
+    uint8_t* __restrict__ compressedBlocks_dev,
+    uint32_t* __restrict__ compressedWords_dev,
+    uint32_t* __restrict__ compressedWords_host_prefix,
+    const uint4* __restrict__ table) {
     // constexpr ANSStateT kStateCheckMul = kANSStateBits - ProbBits;
 
     int num_threads = 16;
@@ -365,6 +365,200 @@ void ansEncodeBatch_v0(
   compressedWords_host_prefix[l] = roundUp(outOffset, kBlockAlignment / sizeof(ANSEncodedT));
   }
   }
+}
+
+template <int one_bits, int BlockSize, int kStateCheckMul>
+void ansEncodeBatch_v1(
+    uint8_t* in,
+    int inSize,
+    uint32_t maxNumCompressedBlocks,
+    uint32_t uncoalescedBlockStride,
+    uint8_t* compressedBlocks_dev,
+    uint32_t* compressedWords_dev,
+    uint32_t* compressedWords_host_prefix,
+    const uint4* table) {
+    // 使用编译器指令启用SIMD优化
+    #pragma omp parallel proc_bind(close) num_threads(omp_get_max_threads())
+    {
+        #pragma omp for schedule(dynamic, 8)
+        for(int l = 0; l < maxNumCompressedBlocks; ++l) {
+            uint32_t start = l * BlockSize;
+            auto blockSize = std::min(start + BlockSize, (uint32_t)inSize) - start;
+
+            auto inBlock = in + start;
+            auto outBlock = (ANSWarpState*)(compressedBlocks_dev + l * uncoalescedBlockStride);
+            ANSEncodedT* outWords = (ANSEncodedT*)(outBlock + 1);
+            
+            // 使用__restrict__关键字减少别名检查
+            uint64_t* __restrict__ state = new uint64_t[kWarpSize];
+            std::fill_n(state, kWarpSize, kANSStartState);
+
+            uint32_t outOffset = 0;
+            uint32_t limit = roundDown(blockSize, 256);
+            int cyclenum0 = limit >> 8;
+
+            // 使用SIMD指令和循环展开优化
+            for (int i = 0; i < cyclenum0; ++i) {
+                int idx0 = i << 8;
+                #pragma unroll(8)
+                for (int j = 0; j < 8; ++j) {
+                    int idx1 = idx0 + (j << 5);
+                    #pragma unroll(16)
+                    for(int k = 0; k < kWarpSize; ++k) {
+                        auto lookup = table[inBlock[k + idx1]];
+                        uint32_t pdf = lookup.x;
+                        uint32_t write_mask = (state[k] >= (pdf << kStateCheckMul));
+                        outWords[outOffset] = (state[k] & kANSEncodedMask);
+                        outOffset += write_mask;
+                        state[k] >>= kANSEncodedBits * write_mask;
+                        uint64_t div = ((state[k] * lookup.z >> 32) + state[k]) >> lookup.w;
+                        state[k] += div * (one_bits - pdf) + (uint64_t)lookup.y;
+                    }
+                }
+            }
+
+            // 处理剩余部分
+            if (blockSize - limit) {
+                uint32_t limit1 = roundDown(blockSize, kWarpSize);
+                int cyclenum1 = (limit1 - limit) / kWarpSize;
+                for(int i = 0; i < cyclenum1; ++i) {
+                    int idx = limit + (i << 5);
+                    #pragma unroll(16)
+                    for(int k = 0; k < kWarpSize; ++k) {
+                        auto lookup = table[inBlock[k + idx]];
+                        uint64_t pdf = lookup.x;
+                        uint64_t tempstate = state[k];
+                        bool write_mask = (tempstate >= (pdf << kStateCheckMul));
+                        outWords[outOffset] = ((uint32_t)tempstate & kANSEncodedMask);
+                        outOffset += write_mask;
+                        tempstate >>= kANSEncodedBits * write_mask;
+                        uint64_t div = ((tempstate * lookup.z >> 32) + tempstate) >> lookup.w;
+                        state[k] = div * (one_bits - pdf) + (uint64_t)lookup.y + tempstate;
+                    }
+                }
+                if (blockSize - limit1) {
+                    int num = blockSize - limit1;
+                    #pragma unroll(16)
+                    for(int k = 0; k < num; ++k) {
+                        auto lookup = table[inBlock[k + limit1]];
+                        uint64_t pdf = lookup.x;
+                        uint64_t tempstate = state[k];
+                        bool write_mask = (tempstate >= (pdf << kStateCheckMul));
+                        outWords[outOffset] = ((uint32_t)tempstate & kANSEncodedMask);
+                        outOffset += write_mask;
+                        tempstate >>= kANSEncodedBits * write_mask;
+                        uint64_t div = ((tempstate * lookup.z >> 32) + tempstate) >> lookup.w;
+                        state[k] = div * (one_bits - pdf) + (uint64_t)lookup.y + tempstate;
+                    }
+                }
+            }
+
+            // 使用SIMD指令存储结果
+            #pragma omp simd
+            for(int i = 0; i < kWarpSize; ++i) {
+                outBlock->warpState[i] = state[i];
+            }
+
+            compressedWords_dev[l] = outOffset;
+            compressedWords_host_prefix[l] = roundUp(outOffset, kBlockAlignment / sizeof(ANSEncodedT));
+            delete[] state;
+        }
+    }
+}
+
+template <int one_bits, int BlockSize, int kStateCheckMul>
+void ansEncodeBatch_v3(
+    uint8_t* __restrict__ in,
+    int inSize,
+    uint32_t __restrict__ maxNumCompressedBlocks,
+    uint32_t __restrict__ uncoalescedBlockStride,
+    uint8_t* __restrict__ compressedBlocks_dev,
+    uint32_t* __restrict__ compressedWords_dev,
+    uint32_t* __restrict__ compressedWords_host_prefix,
+    const uint4* __restrict__ table) {
+    #pragma omp parallel proc_bind(close) num_threads(omp_get_max_threads())
+    {
+        #pragma omp for schedule(dynamic, 8)
+        for(int l = 0; l < maxNumCompressedBlocks; ++l) {
+            uint32_t start = l * BlockSize;
+            auto blockSize = std::min(start + BlockSize, (uint32_t)inSize) - start;
+
+            auto inBlock = in + start;
+            auto outBlock = (ANSWarpState*)(compressedBlocks_dev + l * uncoalescedBlockStride);
+            ANSEncodedT* outWords = (ANSEncodedT*)(outBlock + 1);
+            
+            uint64_t* __restrict__ state = new uint64_t[kWarpSize];
+            std::fill_n(state, kWarpSize, kANSStartState);
+
+            uint32_t outOffset = 0;
+            uint32_t limit = roundDown(blockSize, 256);
+            int cyclenum0 = limit >> 8;
+
+            // 使用C++标准库函数优化内存操作
+            for (int i = 0; i < cyclenum0; ++i) {
+                int idx0 = i << 8;
+                for (int j = 0; j < 8; ++j) {
+                    int idx1 = idx0 + (j << 5);
+                    #pragma unroll(16)
+                    for(int k = 0; k < kWarpSize; ++k) {
+                        auto lookup = table[inBlock[k + idx1]];
+                        uint32_t pdf = lookup.x;
+                        uint32_t write_mask = (state[k] >= (pdf << kStateCheckMul));
+                        outWords[outOffset] = (state[k] & kANSEncodedMask);
+                        outOffset += write_mask;
+                        state[k] >>= kANSEncodedBits * write_mask;
+                        uint64_t div = ((state[k] * lookup.z >> 32) + state[k]) >> lookup.w;
+                        state[k] += div * (one_bits - pdf) + (uint64_t)lookup.y;
+                    }
+                }
+            }
+
+            if (blockSize - limit) {
+                uint32_t limit1 = roundDown(blockSize, kWarpSize);
+                int cyclenum1 = (limit1 - limit) / kWarpSize;
+                for(int i = 0; i < cyclenum1; ++i) {
+                    int idx = limit + (i << 5);
+                    #pragma unroll(16)
+                    for(int k = 0; k < kWarpSize; ++k) {
+                        auto lookup = table[inBlock[k + idx]];
+                        uint64_t pdf = lookup.x;
+                        uint64_t tempstate = state[k];
+                        bool write_mask = (tempstate >= (pdf << kStateCheckMul));
+                        outWords[outOffset] = ((uint32_t)tempstate & kANSEncodedMask);
+                        outOffset += write_mask;
+                        tempstate >>= kANSEncodedBits * write_mask;
+                        uint64_t div = ((tempstate * lookup.z >> 32) + tempstate) >> lookup.w;
+                        state[k] = div * (one_bits - pdf) + (uint64_t)lookup.y + tempstate;
+                    }
+                }
+                if (blockSize - limit1) {
+                    int num = blockSize - limit1;
+                    #pragma unroll(16)
+                    for(int k = 0; k < num; ++k) {
+                        auto lookup = table[inBlock[k + limit1]];
+                        uint64_t pdf = lookup.x;
+                        uint64_t tempstate = state[k];
+                        bool write_mask = (tempstate >= (pdf << kStateCheckMul));
+                        outWords[outOffset] = ((uint32_t)tempstate & kANSEncodedMask);
+                        outOffset += write_mask;
+                        tempstate >>= kANSEncodedBits * write_mask;
+                        uint64_t div = ((tempstate * lookup.z >> 32) + tempstate) >> lookup.w;
+                        state[k] = div * (one_bits - pdf) + (uint64_t)lookup.y + tempstate;
+                    }
+                }
+            }
+
+            // 使用SIMD指令存储结果
+            #pragma omp simd
+            for(int i = 0; i < kWarpSize; ++i) {
+                outBlock->warpState[i] = state[i];
+            }
+
+            compressedWords_dev[l] = outOffset;
+            compressedWords_host_prefix[l] = roundUp(outOffset, kBlockAlignment / sizeof(ANSEncodedT));
+            delete[] state;
+        }
+    }
 }
 
 void ansEncode(
