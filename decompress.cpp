@@ -1,8 +1,3 @@
-#include <iostream>
-#include <fstream>
-#include <iomanip>
-#include <chrono>
-#include <omp.h>
 #include "CpuANSDecode.h"
 
 using namespace cpu_ans;
