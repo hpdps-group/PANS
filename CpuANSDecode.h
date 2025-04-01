@@ -29,6 +29,9 @@ inline void unpackDecodeLookup(uint32_t v, uint32_t& sym, uint32_t& pdf, uint32_
 template <int ProbBits,
     int kDefaultBlockSize>
 void ansDecodeKernel_opti(
+    uint32_t* symbol,
+    uint32_t* pdf,
+    uint32_t* cdf,
     void* in,
     void* out
     ) {
@@ -38,9 +41,9 @@ void ansDecodeKernel_opti(
   // __builtin_prefetch(opdf, 0, 3);
   std::vector<uint32_t> ocdf(kNumSymbols);
   std::exclusive_scan(opdf, opdf + kNumSymbols, ocdf.begin(), 0);
-  uint32_t* symbol = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << ProbBits));
-  uint32_t* pdf = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << ProbBits));
-  uint32_t* cdf = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << ProbBits));
+  // uint32_t* symbol = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << ProbBits));
+  // uint32_t* pdf = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << ProbBits));
+  // uint32_t* cdf = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << ProbBits));
   // uint32_t* table_dev = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << ProbBits) * 3);
   #pragma unroll 
   // #pragma omp parallel for 
@@ -241,6 +244,9 @@ void ansDecodeKernel_opti(
 }
 
 void ansDecode(
+    uint32_t* symbol,
+    uint32_t* pdf,
+    uint32_t* cdf,
     int precision,
     uint8_t* in,
     uint8_t* out
@@ -248,7 +254,7 @@ void ansDecode(
   
   {
 #define RUN_DECODE(BITS)                                           \
-  do { ansDecodeKernel_opti<BITS, kDefaultBlockSize>(in, out);} while (false)   \
+  do { ansDecodeKernel_opti<BITS, kDefaultBlockSize>(symbol, pdf, cdf, in, out);} while (false)   \
     
     switch (precision) {
       case 9:

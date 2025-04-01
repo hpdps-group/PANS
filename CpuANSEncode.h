@@ -130,7 +130,7 @@ void ansCalcWeights(
     if (totalNum == 0) return;
     const uint32_t kProbWeight = 1 << probBits;
     int currentSum = 0;
-    printf("totalNum: %d\n", totalNum);
+    // printf("totalNum: %d\n", totalNum);
     std::vector<uint32_t> qProb(kNumSymbols);
     std::vector<uint32_t> sortedPairs(kNumSymbols);
     for (int i = 0; i < kNumSymbols; ++i) {
