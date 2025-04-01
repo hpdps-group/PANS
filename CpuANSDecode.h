@@ -8,6 +8,12 @@
 
 namespace cpu_ans {
 
+struct SymbolInfo {
+  uint32_t x;//symbol
+  uint32_t y;//pdf
+  uint32_t z;//cdf
+};
+
 inline uint32_t packDecodeLookup(uint32_t sym, uint32_t pdf, uint32_t cdf) {
   // [31:20] cdf
   // [19:8] pdf
@@ -41,6 +47,7 @@ void ansDecodeKernel_opti(
   // __builtin_prefetch(opdf, 0, 3);
   std::vector<uint32_t> ocdf(kNumSymbols);
   std::exclusive_scan(opdf, opdf + kNumSymbols, ocdf.begin(), 0);
+  std::vector<SymbolInfo> symbol_info(1 << ProbBits);
   // uint32_t* symbol = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << ProbBits));
   // uint32_t* pdf = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << ProbBits));
   // uint32_t* cdf = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << ProbBits));
@@ -54,7 +61,8 @@ void ansDecodeKernel_opti(
     for(int j = begin, k = 0; j < end; j ++, k ++){
         symbol[j] = i;
         pdf[j] = smempdf;
-        cdf[j] = k;
+        cdf[j] = (uint32_t)k;
+        // symbol_info[j] = {i, smempdf, (uint32_t)k};
     }
   }
   auto header = *headerIn;
@@ -107,16 +115,25 @@ void ansDecodeKernel_opti(
               //   state[j] = ((state[j] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
               //   outBlock_[k + j] = symbol[s_bar];
               // }
+            
             uint64_t outsym;
             uint32_t s_bar;
             uint32_t read;
             uint16_t v;
+            SymbolInfo info;
             int tempk = k >> 3;
             uint8_t tempoutsym[8];
             // __builtin_prefetch(blockDataIn + compressedWords, 0, 0);
             for(int j = kWarpSize - 8, l = 3; j >= 0; j -= 8, l --){
               int temp = j + 7;
               s_bar = state[temp] & StateMask;
+              // info = symbol_info[s_bar];
+              // state[temp] = info.y * (state[temp] >> ProbBits) + ANSStateT(info.z);
+              // read = state[temp] < kANSMinState;
+              // compressedWords -= read;
+              // v = blockDataIn[compressedWords];
+              // state[temp] = ((state[temp] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+              // tempoutsym[7] = info.x;
               state[temp] = pdf[s_bar] * (state[temp] >> ProbBits) + ANSStateT(cdf[s_bar]);
               read = state[temp] < kANSMinState;
               compressedWords -= read;
@@ -128,6 +145,13 @@ void ansDecodeKernel_opti(
 
               temp --;
               s_bar = state[temp] & StateMask;
+              // info = symbol_info[s_bar];
+              // state[temp] = info.y * (state[temp] >> ProbBits) + ANSStateT(info.z);
+              // read = state[temp] < kANSMinState;
+              // compressedWords -= read;
+              // v = blockDataIn[compressedWords];
+              // state[temp] = ((state[temp] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+              // tempoutsym[6] = info.x;
               state[temp] = pdf[s_bar] * (state[temp] >> ProbBits) + ANSStateT(cdf[s_bar]);
               read = state[temp] < kANSMinState;
               compressedWords -= read;
@@ -139,6 +163,13 @@ void ansDecodeKernel_opti(
 
               temp --;
               s_bar = state[temp] & StateMask;
+              // info = symbol_info[s_bar];
+              // state[temp] = info.y * (state[temp] >> ProbBits) + ANSStateT(info.z);
+              // read = state[temp] < kANSMinState;
+              // compressedWords -= read;
+              // v = blockDataIn[compressedWords];
+              // state[temp] = ((state[temp] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+              // tempoutsym[5] = info.x;
               state[temp] = pdf[s_bar] * (state[temp] >> ProbBits) + ANSStateT(cdf[s_bar]);
               read = state[temp] < kANSMinState;
               compressedWords -= read;
@@ -150,6 +181,13 @@ void ansDecodeKernel_opti(
 
               temp --;
               s_bar = state[temp] & StateMask;
+              // info = symbol_info[s_bar];
+              // state[temp] = info.y * (state[temp] >> ProbBits) + ANSStateT(info.z);
+              // read = state[temp] < kANSMinState;
+              // compressedWords -= read;
+              // v = blockDataIn[compressedWords];
+              // state[temp] = ((state[temp] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+              // tempoutsym[4] = info.x;
               state[temp] = pdf[s_bar] * (state[temp] >> ProbBits) + ANSStateT(cdf[s_bar]);
               read = state[temp] < kANSMinState;
               compressedWords -= read;
@@ -161,6 +199,13 @@ void ansDecodeKernel_opti(
 
               temp --;
               s_bar = state[temp] & StateMask;
+              // info = symbol_info[s_bar];
+              // state[temp] = info.y * (state[temp] >> ProbBits) + ANSStateT(info.z);
+              // read = state[temp] < kANSMinState;
+              // compressedWords -= read;
+              // v = blockDataIn[compressedWords];
+              // state[temp] = ((state[temp] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+              // tempoutsym[3] = info.x;
               state[temp] = pdf[s_bar] * (state[temp] >> ProbBits) + ANSStateT(cdf[s_bar]);
               read = state[temp] < kANSMinState;
               compressedWords -= read;
@@ -172,6 +217,13 @@ void ansDecodeKernel_opti(
 
               temp --;
               s_bar = state[temp] & StateMask;
+              // info = symbol_info[s_bar];
+              // state[temp] = info.y * (state[temp] >> ProbBits) + ANSStateT(info.z);
+              // read = state[temp] < kANSMinState;
+              // compressedWords -= read;
+              // v = blockDataIn[compressedWords];
+              // state[temp] = ((state[temp] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+              // tempoutsym[2] = info.x;
               state[temp] = pdf[s_bar] * (state[temp] >> ProbBits) + ANSStateT(cdf[s_bar]);
               read = state[temp] < kANSMinState;
               compressedWords -= read;
@@ -183,6 +235,13 @@ void ansDecodeKernel_opti(
 
               temp --;
               s_bar = state[temp] & StateMask;
+              // info = symbol_info[s_bar];
+              // state[temp] = info.y * (state[temp] >> ProbBits) + ANSStateT(info.z);
+              // read = state[temp] < kANSMinState;
+              // compressedWords -= read;
+              // v = blockDataIn[compressedWords];
+              // state[temp] = ((state[temp] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+              // tempoutsym[1] = info.x;
               state[temp] = pdf[s_bar] * (state[temp] >> ProbBits) + ANSStateT(cdf[s_bar]);
               read = state[temp] < kANSMinState;
               compressedWords -= read;
@@ -194,6 +253,13 @@ void ansDecodeKernel_opti(
 
               temp --;
               s_bar = state[temp] & StateMask;
+              // info = symbol_info[s_bar];
+              // state[temp] = info.y * (state[temp] >> ProbBits) + ANSStateT(info.z);
+              // read = state[temp] < kANSMinState;
+              // compressedWords -= read;
+              // v = blockDataIn[compressedWords];
+              // state[temp] = ((state[temp] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+              // tempoutsym[0] = info.x;
               state[temp] = pdf[s_bar] * (state[temp] >> ProbBits) + ANSStateT(cdf[s_bar]);
               read = state[temp] < kANSMinState;
               compressedWords -= read;
@@ -211,19 +277,31 @@ void ansDecodeKernel_opti(
           uint32_t remainder = uncompressedWords & 31;
           int uncompressedOffset = uncompressedWords - remainder;
           if(remainder > 0){
-              for(int j = kWarpSize - 1; j >= 0; j --){
-                  bool valid = j < remainder;
+              for(int j = remainder - 1; j >= 0; j --){
+                  // bool valid = j < remainder;
                   auto s_bar = state[j] & StateMask;
-                  if(valid){
-                      state[j] = pdf[s_bar] * (state[j] >> ProbBits) + ANSStateT(cdf[s_bar]);
-                  }
-                  bool read = valid && (state[j] < kANSMinState);
-                compressedWords -= read;
-                auto v = blockDataIn[compressedWords];
-                state[j] = ((state[j] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
-                  if(valid){
-                      outBlock_[uncompressedOffset + j] = symbol[s_bar];
-                  }
+                  // if(valid){
+                  state[j] = pdf[s_bar] * (state[j] >> ProbBits) + ANSStateT(cdf[s_bar]);
+                  // }
+                  bool read = 
+                  // valid && 
+                  (state[j] < kANSMinState);
+                  compressedWords -= read;
+                  auto v = blockDataIn[compressedWords];
+                  state[j] = ((state[j] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+                  // if(valid){
+                  outBlock_[uncompressedOffset + j] = symbol[s_bar];
+                  // }
+                //   if(valid){
+                //       state[j] = pdf[s_bar] * (state[j] >> ProbBits) + ANSStateT(cdf[s_bar]);
+                //   }
+                //   bool read = valid && (state[j] < kANSMinState);
+                // compressedWords -= read;
+                // auto v = blockDataIn[compressedWords];
+                // state[j] = ((state[j] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+                //   if(valid){
+                //       outBlock_[uncompressedOffset + j] = symbol[s_bar];
+                //   }
               }
           }
           while(uncompressedOffset > 0){
@@ -232,9 +310,9 @@ void ansDecodeKernel_opti(
                   auto s_bar = state[j] & StateMask;
                   state[j] = pdf[s_bar] * (state[j] >> ProbBits) + ANSStateT(cdf[s_bar]);
                   bool read = state[j] < kANSMinState;
-                compressedWords -= read;
-                auto v = blockDataIn[compressedWords];
-                state[j] = ((state[j] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
+                  compressedWords -= read;
+                  auto v = blockDataIn[compressedWords];
+                  state[j] = ((state[j] << (kANSEncodedBits * read)) + ANSStateT(v) * read);
                   outBlock_[uncompressedOffset + j] = symbol[s_bar];
               }
           }
