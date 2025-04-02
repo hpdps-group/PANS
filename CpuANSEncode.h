@@ -14,6 +14,7 @@
 namespace cpu_ans {
 
 constexpr uint32_t kAlign = 32;
+constexpr int kPrefetchAhead = 2;
 
 uint32_t getAlignmentRoundUp(uint32_t alignment, const void* ptr) {
     uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
@@ -22,6 +23,9 @@ uint32_t getAlignmentRoundUp(uint32_t alignment, const void* ptr) {
 }
 
 void processBlock_v1(const uint8_t* in, uint32_t size, uint32_t* localHist) {
+    if (size > kAlign) {
+        __builtin_prefetch(in + kAlign, 0, 0);
+    }
     uint32_t roundUp = std::min(size, static_cast<uint32_t>(getAlignmentRoundUp(kAlign, in)));
     for (uint32_t i = 0; i < roundUp; ++i) {
         ++localHist[in[i]];
@@ -33,6 +37,9 @@ void processBlock_v1(const uint8_t* in, uint32_t size, uint32_t* localHist) {
 
     for (uint32_t i = 0; i < numChunks; ++i) {
         const uint8_t* chunk = alignedIn + i * kAlign;
+        if (i + 1 < numChunks) {
+            __builtin_prefetch(chunk + kAlign, 0, 0);
+        }
         ++localHist[chunk[0]]; ++localHist[chunk[1]]; ++localHist[chunk[2]]; ++localHist[chunk[3]];
         ++localHist[chunk[4]]; ++localHist[chunk[5]]; ++localHist[chunk[6]]; ++localHist[chunk[7]];
         ++localHist[chunk[8]]; ++localHist[chunk[9]]; ++localHist[chunk[10]]; ++localHist[chunk[11]];
@@ -267,10 +274,17 @@ void ansEncodeBatch_v0(
     #pragma omp for schedule(dynamic, 8)
     for(int l = 0; l < maxNumCompressedBlocks; ++l){
     // for(int l = thread_id; l < maxNumCompressedBlocks; l += num_threads){
-    uint32_t start = l * BlockSize;
+    uint32_t start = l << 12;
     auto blockSize =  std::min(start + BlockSize, (uint32_t)inSize) - start;
 
     auto inBlock = in + start;
+    if (l + kPrefetchAhead < maxNumCompressedBlocks) {
+        uint32_t prefetch_l = l + kPrefetchAhead;
+        uint32_t prefetch_start = prefetch_l << 12;
+        __builtin_prefetch(in + prefetch_start, 0, 0);
+        __builtin_prefetch(compressedBlocks_dev + prefetch_l * uncoalescedBlockStride, 1, 0);
+    }
+
     auto outBlock = (ANSWarpState*)(compressedBlocks_dev
         + l * uncoalescedBlockStride);
     ANSEncodedT* outWords = (ANSEncodedT*)(outBlock + 1);
@@ -279,14 +293,20 @@ void ansEncodeBatch_v0(
     std::fill(std::begin(state), std::end(state), kANSStartState);
     // std::fill(state, state + kWarpSize, kANSStartState);
     uint32_t outOffset = 0;
-    uint32_t limit = roundDown(blockSize, 256);
-    int cyclenum0 = limit >> 8;
+    constexpr int limit = 4096 & 255;
+    //roundDown(blockSize, 256);
+    constexpr int cyclenum0 = limit >> 8;
+    // __builtin_prefetch(inBlock, 0, 0);
     for (int i = 0; i < cyclenum0; ++i) {
       int idx0 = i << 8;
+      const uint8_t* vecStart = inBlock + (i << 8);
+      __builtin_prefetch(vecStart + 256, 0, 0);
       for (int j = 0; j < 8; ++j) {
         int idx1 = idx0 + (j << 5);
         // // auto index = inBlock + idx1;
         // auto index = inBlock + idx0 + (j << 5);
+        
+        __builtin_prefetch(inBlock + idx1, 0, 0);
         #pragma unroll(16)
         // #pragma omp simd
         for(int k = 0; k < kWarpSize; ++k){
@@ -309,6 +329,7 @@ void ansEncodeBatch_v0(
   if (blockSize - limit) {
     uint32_t limit1 = roundDown(blockSize, kWarpSize);
     int cyclenum1 = (limit1 - limit) / kWarpSize;
+    __builtin_prefetch(inBlock + limit, 0, 0);
     for(int i = 0; i < cyclenum1; ++i){
       int idx = limit + (i << 5);
       for(int k = 0; k < kWarpSize; ++k){
