@@ -12,7 +12,10 @@
 #include "CpuANSUtils.h"
 
 namespace cpu_ans {
-
+uint32_t umulhi(uint32_t a, uint32_t b) {
+    uint64_t product = (uint64_t)a * (uint64_t)b;
+    return (uint32_t)(product >> 32);
+}
 constexpr uint32_t kAlign = 32;
 
 __attribute__((target("avx2")))
