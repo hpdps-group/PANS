@@ -267,12 +267,13 @@ void ansEncodeBatch_v0(
     // constexpr ANSStateT kStateCheckMul = kANSStateBits - ProbBits;
 
     int num_threads = 16;
+    int l = 0;
     // #pragma omp parallel proc_bind(spread) num_threads(num_threads) 
     #pragma omp parallel proc_bind(close) num_threads(omp_get_max_threads())
     {
     // int thread_id = omp_get_thread_num();
     #pragma omp for schedule(dynamic, 8)
-    for(int l = 0; l < maxNumCompressedBlocks; ++l){
+    for(l = 0; l < maxNumCompressedBlocks; ++l){
     // for(int l = thread_id; l < maxNumCompressedBlocks; l += num_threads){
     uint32_t start = l << 12;
     auto blockSize =  std::min(start + BlockSize, (uint32_t)inSize) - start;
@@ -293,9 +294,12 @@ void ansEncodeBatch_v0(
     std::fill(std::begin(state), std::end(state), kANSStartState);
     // std::fill(state, state + kWarpSize, kANSStartState);
     uint32_t outOffset = 0;
-    constexpr int limit = 4096 & 255;
-    //roundDown(blockSize, 256);
-    constexpr int cyclenum0 = limit >> 8;
+    // constexpr 
+    int limit = 
+    // 4096 & 255;
+    roundDown(blockSize, 256);
+    // constexpr 
+    int cyclenum0 = limit >> 8;
     // __builtin_prefetch(inBlock, 0, 0);
     for (int i = 0; i < cyclenum0; ++i) {
       int idx0 = i << 8;
