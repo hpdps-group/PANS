@@ -1,0 +1,1 @@
+/usr/bin/c++  -fopenmp -march=native CMakeFiles/cpuans_compress.dir/compress.cpp.o -o cpuans_compress  -fopenmp /usr/lib/gcc/x86_64-linux-gnu/9/libgomp.so -lpthread 
