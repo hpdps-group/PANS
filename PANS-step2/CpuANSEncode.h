@@ -18,54 +18,52 @@ uint32_t umulhi(uint32_t a, uint32_t b) {
 }
 constexpr uint32_t kAlign = 32;
 
-__attribute__((target("avx2")))
-void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restrict localHist) {
+uint32_t getAlignmentRoundUp(uint32_t alignment, const void* ptr) {
+    uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
+    uint32_t mod = addr % alignment;
+    return mod == 0 ? 0 : alignment - mod;
+}
+
+void processBlock_v1(const uint8_t* in, uint32_t size, uint32_t* localHist) {
+    if (size > kAlign) {
+        __builtin_prefetch(in + kAlign, 0, 0);
+    }
     uint32_t roundUp = std::min(size, static_cast<uint32_t>(getAlignmentRoundUp(kAlign, in)));
     for (uint32_t i = 0; i < roundUp; ++i) {
         ++localHist[in[i]];
     }
+
     const uint8_t* alignedIn = in + roundUp;
     uint32_t remaining = size - roundUp;
     uint32_t numChunks = remaining / kAlign;
-    const __m256i* avxIn = reinterpret_cast<const __m256i*>(alignedIn);
+
     for (uint32_t i = 0; i < numChunks; ++i) {
-        const __m256i vec = _mm256_load_si256(avxIn + i);
-        const uint8_t* bytes = reinterpret_cast<const uint8_t*>(avxIn + i);
-        _mm_prefetch(reinterpret_cast<const char*>(avxIn + i + 1), _MM_HINT_T0);
-
-        uint32_t v0 = bytes[0], v1 = bytes[1], v2 = bytes[2], v3 = bytes[3];
-        uint32_t v4 = bytes[4], v5 = bytes[5], v6 = bytes[6], v7 = bytes[7];
-        ++localHist[v0]; ++localHist[v1]; ++localHist[v2]; ++localHist[v3];
-        ++localHist[v4]; ++localHist[v5]; ++localHist[v6]; ++localHist[v7];
-
-        uint32_t v8 = bytes[8], v9 = bytes[9], v10 = bytes[10], v11 = bytes[11];
-        uint32_t v12 = bytes[12], v13 = bytes[13], v14 = bytes[14], v15 = bytes[15];
-        ++localHist[v8]; ++localHist[v9]; ++localHist[v10]; ++localHist[v11];
-        ++localHist[v12]; ++localHist[v13]; ++localHist[v14]; ++localHist[v15];
-
-        uint32_t v16 = bytes[16], v17 = bytes[17], v18 = bytes[18], v19 = bytes[19];
-        uint32_t v20 = bytes[20], v21 = bytes[21], v22 = bytes[22], v23 = bytes[23];
-        ++localHist[v16]; ++localHist[v17]; ++localHist[v18]; ++localHist[v19];
-        ++localHist[v20]; ++localHist[v21]; ++localHist[v22]; ++localHist[v23];
-
-        uint32_t v24 = bytes[24], v25 = bytes[25], v26 = bytes[26], v27 = bytes[27];
-        uint32_t v28 = bytes[28], v29 = bytes[29], v30 = bytes[30], v31 = bytes[31];
-        ++localHist[v24]; ++localHist[v25]; ++localHist[v26]; ++localHist[v27];
-        ++localHist[v28]; ++localHist[v29]; ++localHist[v30]; ++localHist[v31];
+        const uint8_t* chunk = alignedIn + i * kAlign;
+        if (i + 1 < numChunks) {
+            __builtin_prefetch(chunk + kAlign, 0, 0);
+        }
+        ++localHist[chunk[0]]; ++localHist[chunk[1]]; ++localHist[chunk[2]]; ++localHist[chunk[3]];
+        ++localHist[chunk[4]]; ++localHist[chunk[5]]; ++localHist[chunk[6]]; ++localHist[chunk[7]];
+        ++localHist[chunk[8]]; ++localHist[chunk[9]]; ++localHist[chunk[10]]; ++localHist[chunk[11]];
+        ++localHist[chunk[12]]; ++localHist[chunk[13]]; ++localHist[chunk[14]]; ++localHist[chunk[15]];
+        ++localHist[chunk[16]]; ++localHist[chunk[17]]; ++localHist[chunk[18]]; ++localHist[chunk[19]];
+        ++localHist[chunk[20]]; ++localHist[chunk[21]]; ++localHist[chunk[22]]; ++localHist[chunk[23]];
+        ++localHist[chunk[24]]; ++localHist[chunk[25]]; ++localHist[chunk[26]]; ++localHist[chunk[27]];
+        ++localHist[chunk[28]]; ++localHist[chunk[29]]; ++localHist[chunk[30]]; ++localHist[chunk[31]];
     }
 
     const uint8_t* tail = alignedIn + numChunks * kAlign;
     uint32_t remainingTail = remaining % kAlign;
     
     if (remainingTail >= 8) {
-        const uint8_t* chunk = tail;
-        ++localHist[chunk[0]]; ++localHist[chunk[1]]; 
-        ++localHist[chunk[2]]; ++localHist[chunk[3]];
-        ++localHist[chunk[4]]; ++localHist[chunk[5]];
-        ++localHist[chunk[6]]; ++localHist[chunk[7]];
+        ++localHist[tail[0]]; ++localHist[tail[1]];
+        ++localHist[tail[2]]; ++localHist[tail[3]];
+        ++localHist[tail[4]]; ++localHist[tail[5]];
+        ++localHist[tail[6]]; ++localHist[tail[7]];
         tail += 8;
         remainingTail -= 8;
     }
+
     switch (remainingTail) {
         case 7: ++localHist[tail[6]];
         case 6: ++localHist[tail[5]];
@@ -79,24 +77,17 @@ void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restr
 }
 
 void ansHistogram(
-    const uint8_t* __restrict in,
+    const uint8_t* in,
     uint32_t size,
-    uint32_t* __restrict out,
+    uint32_t* out,
     bool multithread = true) {
-
     std::memset(out, 0, kNumSymbols * sizeof(uint32_t));
 
     if (size < 100000 || !multithread) {
         alignas(64) uint32_t localHist[kNumSymbols] = {0};
-        processBlock(in, size, localHist);
-        for (int i = 0; i < kNumSymbols; i += 8) {
-            _mm256_store_si256(
-                reinterpret_cast<__m256i*>(out + i),
-                _mm256_add_epi32(
-                    _mm256_load_si256(reinterpret_cast<const __m256i*>(out + i)),
-                    _mm256_load_si256(reinterpret_cast<const __m256i*>(localHist + i))
-                )
-            );
+        processBlock_v1(in, size, localHist);
+        for (int i = 0; i < kNumSymbols; ++i) {
+            out[i] += localHist[i];
         }
         return;
     }
@@ -117,11 +108,11 @@ void ansHistogram(
 
             uint32_t* localHist = &histograms[t * kNumSymbols];
             while (true) {
-                const uint32_t blockIdx = currentBlock.fetch_add(1);
-                const uint32_t start = blockIdx * blockSize;
+                uint32_t blockIdx = currentBlock.fetch_add(1);
+                uint32_t start = blockIdx * blockSize;
                 if (start >= size) break;
-                const uint32_t end = std::min(start + blockSize, size);
-                processBlock(in + start, end - start, localHist);
+                uint32_t end = std::min(start + blockSize, size);
+                processBlock_v1(in + start, end - start, localHist);
             }
         });
     }
@@ -132,7 +123,6 @@ void ansHistogram(
     
     for (unsigned t = 0; t < numThreads; ++t) {
         const uint32_t* src = &histograms[t * kNumSymbols];
-        #pragma omp simd aligned(src, out:64)
         for (int i = 0; i < kNumSymbols; ++i) {
             out[i] += src[i];
         }
