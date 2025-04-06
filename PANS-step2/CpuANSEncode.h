@@ -25,9 +25,6 @@ uint32_t getAlignmentRoundUp(uint32_t alignment, const void* ptr) {
 }
 
 void processBlock_v1(const uint8_t* in, uint32_t size, uint32_t* localHist) {
-    if (size > kAlign) {
-        __builtin_prefetch(in + kAlign, 0, 0);
-    }
     uint32_t roundUp = std::min(size, static_cast<uint32_t>(getAlignmentRoundUp(kAlign, in)));
     for (uint32_t i = 0; i < roundUp; ++i) {
         ++localHist[in[i]];
@@ -39,9 +36,6 @@ void processBlock_v1(const uint8_t* in, uint32_t size, uint32_t* localHist) {
 
     for (uint32_t i = 0; i < numChunks; ++i) {
         const uint8_t* chunk = alignedIn + i * kAlign;
-        if (i + 1 < numChunks) {
-            __builtin_prefetch(chunk + kAlign, 0, 0);
-        }
         ++localHist[chunk[0]]; ++localHist[chunk[1]]; ++localHist[chunk[2]]; ++localHist[chunk[3]];
         ++localHist[chunk[4]]; ++localHist[chunk[5]]; ++localHist[chunk[6]]; ++localHist[chunk[7]];
         ++localHist[chunk[8]]; ++localHist[chunk[9]]; ++localHist[chunk[10]]; ++localHist[chunk[11]];
