@@ -865,15 +865,25 @@ void ansEncode(
   // printf("maxNumCompressedBlocks:%d\n",maxNumCompressedBlocks);
   header.setTotalUncompressedWords(inSize);
   // printf("uncompressedWords:%d\n",uncompressedWords);
+
 //   auto start = std::chrono::high_resolution_clock::now();
+  if(inSize > 2621440){
+  ansHistogram_v1(
+      in,
+      inSize,
+      tempHistogram);
+  }
+  else{
   ansHistogram_v2(
       in,
       inSize,
       tempHistogram);
+  }
 //   auto end = std::chrono::high_resolution_clock::now();
 //   double histgram_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
-//   printf("histgram_time: %f\n", histgram_time);
-//   start = std::chrono::high_resolution_clock::now(); 
+//   printf("little histgram_time: %f\n", histgram_time);
+  
+//   start = std::chrono::high_resolution_clock::now();
 #define RUN_ENCODE(ONEBITS, kStateCheckMul)                                       \
   do {    \
     ansCalcWeights<ONEBITS, kStateCheckMul>(\
@@ -908,9 +918,11 @@ void ansEncode(
     }
 
 #undef RUN_ENCODE
+
 //   end = std::chrono::high_resolution_clock::now();
 //   double other = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
 //   printf("other: %f\n", other);
+
   uint32_t totalCompressedWords = 0;
   // std::exclusive_scan(compressedWords_host, compressedWords_host + maxNumCompressedBlocks, compressedWordsPrefix_host, 0);
   if(maxNumCompressedBlocks > 0){
