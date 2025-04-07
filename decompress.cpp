@@ -22,7 +22,7 @@ void decompressFileWithANS(
     uint32_t* pdf = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << precision));
     uint32_t* cdf = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * (1 << precision));
     std::cout<<"decode start!"<<std::endl;
-    double decomp_time = 0.0;
+    double decomp_time = 999999;
     for(int i = 0; i < 11; i ++){
     auto start = std::chrono::high_resolution_clock::now();
     ansDecode(
@@ -33,11 +33,11 @@ void decompressFileWithANS(
         fileCompressedData.data(),
         decPtrs);
     auto end = std::chrono::high_resolution_clock::now();  
-    if(i > 5)
-        decomp_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3; 
+    if(decomp_time > std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3)
+        decomp_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3; 
     }
-    double dc_bw = ( 1.0 * totalCompressedSize / 1e6 ) / ( (decomp_time / 5.0) * 1e-3 );
-    std::cout << "decomp time " << std::fixed << std::setprecision(6) << (decomp_time / 5.0) << " ms B/W "   
+    double dc_bw = ( 1.0 * totalCompressedSize / 1e6 ) / ( (decomp_time) * 1e-3 );
+    std::cout << "decomp time " << std::fixed << std::setprecision(6) << (decomp_time) << " ms B/W "   
                   << std::fixed << std::setprecision(1) << dc_bw << " MB/s" << std::endl;
     std::ofstream outFile(outputFilePath, std::ios::binary);
     outFile.write(reinterpret_cast<const char*>(decPtrs), batchSize*sizeof(uint8_t));
