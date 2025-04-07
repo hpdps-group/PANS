@@ -451,9 +451,11 @@ void ansEncodeBatch_v0(
     std::fill(std::begin(state), std::end(state), kANSStartState);
     // std::fill(state, state + kWarpSize, kANSStartState);
     uint32_t outOffset = 0;
-    constexpr int limit = 4096 ;
+    // constexpr 
+    int limit = roundDown(blockSize, 256);
     //roundDown(blockSize, 256);
-    constexpr int cyclenum0 = limit >> 8;
+    // constexpr 
+    int cyclenum0 = limit >> 8;
     // __builtin_prefetch(inBlock, 0, 0);
     for (int i = 0; i < cyclenum0; ++i) {
       int idx0 = i << 8;
@@ -867,7 +869,7 @@ void ansEncode(
   // printf("uncompressedWords:%d\n",uncompressedWords);
 
 //   auto start = std::chrono::high_resolution_clock::now();
-  if(inSize > 2621440){
+  if(inSize > 2621440 * 2){
   ansHistogram_v1(
       in,
       inSize,
