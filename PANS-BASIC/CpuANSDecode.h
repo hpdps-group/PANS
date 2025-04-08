@@ -7,14 +7,14 @@
 
 namespace cpu_ans {
 
-inline uint32_t packDecodeLookup(uint32_t sym, uint32_t pdf, uint32_t cdf) {
+uint32_t packDecodeLookup(uint32_t sym, uint32_t pdf, uint32_t cdf) {
   // [31:20] cdf
   // [19:8] pdf
   // [7:0] symbol
   return (cdf << 20) | (pdf << 8) | sym;
 }
 
-inline void unpackDecodeLookup(uint32_t v, uint32_t& sym, uint32_t& pdf, uint32_t& cdf) {
+void unpackDecodeLookup(uint32_t v, uint32_t& sym, uint32_t& pdf, uint32_t& cdf) {
   // [31:20] cdf
   // [19:8] pdf
   // [7:0] symbol

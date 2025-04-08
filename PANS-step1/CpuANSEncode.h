@@ -104,7 +104,7 @@ void ansCalcWeights(
     }
 
     uint32_t symPdf[kNumSymbols];
-    #pragma omp for simd schedule(static)
+    #pragma omp for schedule(static)
     for(int i = 0; i < kNumSymbols; i ++){
       symPdf[tidSymbol[i]] = qProb[i];
     }
@@ -117,8 +117,7 @@ void ansCalcWeights(
         uint32_t p = symPdf[i];
         uint32_t shift = 32 - __builtin_clz(p - 1);
         uint64_t magic = 0.0;
-        if(p != 0)
-          magic = ((1ULL << 32) * ((1ULL << shift) - p)) / p + 1;
+        if(p!=0) magic = ((1ULL << 32) * ((1ULL << shift) - p)) / p + 1;
         cdf[i] = cdf[i-1] + symPdf[i-1];
         table[i] = {p, cdf[i], static_cast<uint32_t>(magic), shift};
     }
@@ -135,7 +134,7 @@ void ansEncodeBatch(
     uint32_t* compressedWordsPrefix_host,
     const uint4* table) {
     constexpr ANSStateT kStateCheckMul = kANSStateBits - ProbBits;
-    #pragma omp parallel for proc_bind(spread) num_threads(32) 
+    #pragma omp parallel for num_threads(32) 
     for(int l = 0; l < maxNumCompressedBlocks; l ++){
     uint32_t start = l * BlockSize;
     auto blockSize =  std::min(start + BlockSize, (uint32_t)inSize) - start;
@@ -313,9 +312,9 @@ void ansEncode(
       table);
 
   uint32_t uncoalescedBlockStride = getMaxBlockSizeUnCoalesced(kDefaultBlockSize);
-  uint8_t* compressedBlocks_host = (uint8_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint8_t) * maxNumCompressedBlocks * uncoalescedBlockStride);
-  uint32_t* compressedWords_host = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
-  uint32_t* compressedWordsPrefix_host = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
+  uint8_t* compressedBlocks_host = (uint8_t*)malloc(sizeof(uint8_t) * maxNumCompressedBlocks * uncoalescedBlockStride);
+  uint32_t* compressedWords_host = (uint32_t*)malloc(sizeof(uint32_t) * maxNumCompressedBlocks);
+  uint32_t* compressedWordsPrefix_host = (uint32_t*)malloc(sizeof(uint32_t) * maxNumCompressedBlocks);
 
 #define RUN_ENCODE(BITS)                                       \
   do {                                                         \

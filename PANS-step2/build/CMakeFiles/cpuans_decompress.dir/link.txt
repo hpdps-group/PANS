@@ -1,1 +1,1 @@
-/usr/bin/c++  -fopenmp -march=native CMakeFiles/cpuans_decompress.dir/decompress.cpp.o -o cpuans_decompress  -fopenmp /usr/lib/gcc/x86_64-linux-gnu/9/libgomp.so -lpthread 
+/opt/rh/devtoolset-9/root/usr/bin/c++  -pthread -mavx2 -mavx512f -mavx512cd -mavx512vl -mavx512bw -fopenmp -march=native CMakeFiles/cpuans_decompress.dir/decompress.cpp.o -o cpuans_decompress  -fopenmp -lgomp /lib64/libpthread.so 

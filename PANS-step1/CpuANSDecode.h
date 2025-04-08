@@ -7,14 +7,14 @@
 
 namespace cpu_ans {
 
-inline uint32_t packDecodeLookup(uint32_t sym, uint32_t pdf, uint32_t cdf) {
+uint32_t packDecodeLookup(uint32_t sym, uint32_t pdf, uint32_t cdf) {
   // [31:20] cdf
   // [19:8] pdf
   // [7:0] symbol
   return (cdf << 20) | (pdf << 8) | sym;
 }
 
-inline void unpackDecodeLookup(uint32_t v, uint32_t& sym, uint32_t& pdf, uint32_t& cdf) {
+void unpackDecodeLookup(uint32_t v, uint32_t& sym, uint32_t& pdf, uint32_t& cdf) {
   // [31:20] cdf
   // [19:8] pdf
   // [7:0] symbol
@@ -40,7 +40,7 @@ void ansDecodeKernel_opti(
   auto totalUncompressedWords = header.getTotalUncompressedWords();
 
   int num_threads = 16;
-  #pragma omp parallel proc_bind(spread) num_threads(num_threads)
+  #pragma omp parallel num_threads(num_threads)
   {
     int thread_id = omp_get_thread_num();
     for(int i = thread_id; i < numBlocks; i += num_threads){

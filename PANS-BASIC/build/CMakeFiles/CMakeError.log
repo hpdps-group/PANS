@@ -1,25 +1,22 @@
 Performing C++ SOURCE FILE Test CMAKE_HAVE_LIBC_PTHREAD failed with the following output:
-Change Dir: /home/yangjinwu/PANS-BASIC/build/CMakeFiles/CMakeTmp
+Change Dir: /home/gyd/PANS_test/PANS-BASIC/build/CMakeFiles/CMakeTmp
 
-Run Build Command(s):/usr/bin/make -f Makefile cmTC_09652/fast && /usr/bin/make  -f CMakeFiles/cmTC_09652.dir/build.make CMakeFiles/cmTC_09652.dir/build
-make[1]: Entering directory '/home/yangjinwu/PANS-BASIC/build/CMakeFiles/CMakeTmp'
-Building CXX object CMakeFiles/cmTC_09652.dir/src.cxx.o
-/usr/bin/c++ -DCMAKE_HAVE_LIBC_PTHREAD  -std=gnu++17 -o CMakeFiles/cmTC_09652.dir/src.cxx.o -c /home/yangjinwu/PANS-BASIC/build/CMakeFiles/CMakeTmp/src.cxx
-Linking CXX executable cmTC_09652
-/opt/conda/bin/cmake -E cmake_link_script CMakeFiles/cmTC_09652.dir/link.txt --verbose=1
-/usr/bin/c++ CMakeFiles/cmTC_09652.dir/src.cxx.o -o cmTC_09652 
-CMakeFiles/cmTC_09652.dir/src.cxx.o: In function `main':
-src.cxx:(.text+0x3e): undefined reference to `pthread_create'
-src.cxx:(.text+0x4a): undefined reference to `pthread_detach'
-src.cxx:(.text+0x56): undefined reference to `pthread_cancel'
-src.cxx:(.text+0x67): undefined reference to `pthread_join'
-src.cxx:(.text+0x7b): undefined reference to `pthread_atfork'
+Run Build Command(s):/opt/rh/devtoolset-8/root/usr/bin/gmake -f Makefile cmTC_4f0c6/fast && /opt/rh/devtoolset-8/root/usr/bin/gmake  -f CMakeFiles/cmTC_4f0c6.dir/build.make CMakeFiles/cmTC_4f0c6.dir/build
+gmake[1]: Entering directory '/home/gyd/PANS_test/PANS-BASIC/build/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_4f0c6.dir/src.cxx.o
+/opt/rh/devtoolset-9/root/usr/bin/c++ -DCMAKE_HAVE_LIBC_PTHREAD  -std=gnu++17 -o CMakeFiles/cmTC_4f0c6.dir/src.cxx.o -c /home/gyd/PANS_test/PANS-BASIC/build/CMakeFiles/CMakeTmp/src.cxx
+Linking CXX executable cmTC_4f0c6
+/usr/local/bin/cmake -E cmake_link_script CMakeFiles/cmTC_4f0c6.dir/link.txt --verbose=1
+/opt/rh/devtoolset-9/root/usr/bin/c++ CMakeFiles/cmTC_4f0c6.dir/src.cxx.o -o cmTC_4f0c6 
+/opt/rh/devtoolset-9/root/usr/libexec/gcc/x86_64-redhat-linux/9/ld: CMakeFiles/cmTC_4f0c6.dir/src.cxx.o: in function `main':
+src.cxx:(.text+0x2d): undefined reference to `pthread_create'
+/opt/rh/devtoolset-9/root/usr/libexec/gcc/x86_64-redhat-linux/9/ld: src.cxx:(.text+0x39): undefined reference to `pthread_detach'
+/opt/rh/devtoolset-9/root/usr/libexec/gcc/x86_64-redhat-linux/9/ld: src.cxx:(.text+0x45): undefined reference to `pthread_cancel'
+/opt/rh/devtoolset-9/root/usr/libexec/gcc/x86_64-redhat-linux/9/ld: src.cxx:(.text+0x56): undefined reference to `pthread_join'
 collect2: error: ld returned 1 exit status
-CMakeFiles/cmTC_09652.dir/build.make:98: recipe for target 'cmTC_09652' failed
-make[1]: *** [cmTC_09652] Error 1
-make[1]: Leaving directory '/home/yangjinwu/PANS-BASIC/build/CMakeFiles/CMakeTmp'
-Makefile:127: recipe for target 'cmTC_09652/fast' failed
-make: *** [cmTC_09652/fast] Error 2
+gmake[1]: *** [CMakeFiles/cmTC_4f0c6.dir/build.make:99: cmTC_4f0c6] Error 1
+gmake[1]: Leaving directory '/home/gyd/PANS_test/PANS-BASIC/build/CMakeFiles/CMakeTmp'
+gmake: *** [Makefile:127: cmTC_4f0c6/fast] Error 2
 
 
 Source file was:

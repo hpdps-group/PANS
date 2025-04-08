@@ -45,19 +45,19 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = /opt/conda/bin/cmake
+CMAKE_COMMAND = /usr/local/bin/cmake
 
 # The command to remove a file.
-RM = /opt/conda/bin/cmake -E rm -f
+RM = /usr/local/bin/cmake -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/yangjinwu/PANS-step1
+CMAKE_SOURCE_DIR = /home/gyd/PANS_test/PANS-step1
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/yangjinwu/PANS-step1/build
+CMAKE_BINARY_DIR = /home/gyd/PANS_test/PANS-step1/build
 
 #=============================================================================
 # Directory level rules for the build root directory
@@ -83,14 +83,14 @@ clean: CMakeFiles/cpuans_decompress.dir/clean
 CMakeFiles/cpuans_compress.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/cpuans_compress.dir/build.make CMakeFiles/cpuans_compress.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/cpuans_compress.dir/build.make CMakeFiles/cpuans_compress.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/yangjinwu/PANS-step1/build/CMakeFiles --progress-num=1,2 "Built target cpuans_compress"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/gyd/PANS_test/PANS-step1/build/CMakeFiles --progress-num=1,2 "Built target cpuans_compress"
 .PHONY : CMakeFiles/cpuans_compress.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/cpuans_compress.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/yangjinwu/PANS-step1/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/gyd/PANS_test/PANS-step1/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/cpuans_compress.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/yangjinwu/PANS-step1/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/gyd/PANS_test/PANS-step1/build/CMakeFiles 0
 .PHONY : CMakeFiles/cpuans_compress.dir/rule
 
 # Convenience name for target.
@@ -109,14 +109,14 @@ CMakeFiles/cpuans_compress.dir/clean:
 CMakeFiles/cpuans_decompress.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/cpuans_decompress.dir/build.make CMakeFiles/cpuans_decompress.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/cpuans_decompress.dir/build.make CMakeFiles/cpuans_decompress.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/yangjinwu/PANS-step1/build/CMakeFiles --progress-num=3,4 "Built target cpuans_decompress"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/gyd/PANS_test/PANS-step1/build/CMakeFiles --progress-num=3,4 "Built target cpuans_decompress"
 .PHONY : CMakeFiles/cpuans_decompress.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/cpuans_decompress.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/yangjinwu/PANS-step1/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/gyd/PANS_test/PANS-step1/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/cpuans_decompress.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/yangjinwu/PANS-step1/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/gyd/PANS_test/PANS-step1/build/CMakeFiles 0
 .PHONY : CMakeFiles/cpuans_decompress.dir/rule
 
 # Convenience name for target.

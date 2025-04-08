@@ -83,10 +83,10 @@ void ansDecodeKernel_opti(
     // __builtin_prefetch(pdf, 0, 0);
     // __builtin_prefetch(cdf, 0, 0);
     int thread_id = omp_get_thread_num();
-    #pragma omp for schedule(dynamic, 8)
+    //#pragma omp for schedule(dynamic, 8)
     // #pragma omp for 
-    // for(int i = thread_id; i < numBlocks; i += num_threads){
-    for(int i = 0; i < numBlocks; i ++){
+    for(int i = thread_id; i < numBlocks; i += num_threads){
+    //for(int i = 0; i < numBlocks; i ++){
       ANSStateT state[kWarpSize];
       auto State = headerIn->getWarpStates()[i].warpState;
       #pragma  unroll 16

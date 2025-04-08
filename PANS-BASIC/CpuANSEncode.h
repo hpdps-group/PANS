@@ -31,6 +31,19 @@ void ansHistogram(
         out[in[i]] ++;
 }
 
+void bubbleSortDesc(std::vector<uint32_t>& arr) {
+    int n = arr.size();
+    for (int i = 0; i < n - 1; i++) {
+        for (int j = 0; j < n - i - 1; j++) {
+            if (arr[j] < arr[j + 1]) {
+                uint32_t temp = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+            }
+        }
+    }
+}
+
 void ansCalcWeights(
     int probBits,
     uint32_t totalNum,
@@ -45,16 +58,7 @@ void ansCalcWeights(
         qProb[i] = (counts[i] > 0 && qProb[i] == 0) ? 1U : qProb[i];
         sortedPairs[i] = (qProb[i] << 16) | i;
     }
-
-    #pragma omp single
-    {
-        __gnu_parallel::sort(
-            sortedPairs.begin(), 
-            sortedPairs.end(),
-            [](uint32_t a, uint32_t b) { return a > b; },
-            __gnu_parallel::balanced_quicksort_tag()
-        );
-    }
+    bubbleSortDesc(sortedPairs);
 
     uint32_t tidSymbol[kNumSymbols];
     for (int i = 0; i < kNumSymbols; ++i) {
@@ -63,15 +67,8 @@ void ansCalcWeights(
     }
 
     int currentSum = 0;
-    #pragma omp parallel num_threads(32)
-    {
-        int localSum = 0;
-        #pragma omp for schedule(static)
-        for (int i = 0; i < kNumSymbols; ++i) {
-            localSum += qProb[i];
-        }
-        #pragma omp atomic
-        currentSum += localSum;
+    for (int i = 0; i < kNumSymbols; ++i) {
+        currentSum += qProb[i];
     }
 
     int diff = static_cast<int>(kProbWeight) - currentSum;
@@ -79,7 +76,6 @@ void ansCalcWeights(
     if (diff > 0) {
       int iterToApply = std::min(diff, static_cast<int>(kNumSymbols));
       for(int i = diff; i > 0; i -= iterToApply){
-        #pragma omp parallel for num_threads(32) schedule(static)
         for(int j = 0; j < kNumSymbols; ++j){
             qProb[j] += (tidSymbol[j] < iterToApply);       
         }
@@ -105,7 +101,6 @@ void ansCalcWeights(
     }
 
     uint32_t symPdf[kNumSymbols];
-    #pragma omp for simd schedule(static)
     for(int i = 0; i < kNumSymbols; i ++){
       symPdf[tidSymbol[i]] = qProb[i];
     }
@@ -119,7 +114,7 @@ void ansCalcWeights(
         uint32_t shift = 32 - __builtin_clz(p - 1);
         uint64_t magic = 0.0;
         if(p != 0)
-          magic = ((1ULL << 32) * ((1ULL << shift) - p)) / p + 1;
+         magic = ((1ULL << 32) * ((1ULL << shift) - p)) / p + 1;
         cdf[i] = cdf[i-1] + symPdf[i-1];
         table[i] = {p, cdf[i], static_cast<uint32_t>(magic), shift};
     }
@@ -312,9 +307,9 @@ void ansEncode(
       table);
 
   uint32_t uncoalescedBlockStride = getMaxBlockSizeUnCoalesced(kDefaultBlockSize);
-  uint8_t* compressedBlocks_host = (uint8_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint8_t) * maxNumCompressedBlocks * uncoalescedBlockStride);
-  uint32_t* compressedWords_host = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
-  uint32_t* compressedWordsPrefix_host = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
+  uint8_t* compressedBlocks_host = (uint8_t*)malloc(sizeof(uint8_t) * maxNumCompressedBlocks * uncoalescedBlockStride);
+  uint32_t* compressedWords_host = (uint32_t*)malloc(sizeof(uint32_t) * maxNumCompressedBlocks);
+  uint32_t* compressedWordsPrefix_host = (uint32_t*)malloc(sizeof(uint32_t) * maxNumCompressedBlocks);
 
 #define RUN_ENCODE(BITS)                                       \
   do {                                                         \

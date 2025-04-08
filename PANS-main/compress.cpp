@@ -11,12 +11,13 @@ void compressFileWithANS(
 		) {
     std::ifstream inputFile(inputFilePath, std::ios::binary | std::ios::ate);
     std::streamsize fileSize = inputFile.tellg();
-    std::vector<uint8_t> fileData(fileSize);
+    uint8_t* fileData = (uint8_t*)malloc(fileSize);
+    //std::vector<uint8_t> fileData(fileSize);
     inputFile.seekg(0, std::ios::beg);
-    inputFile.read(reinterpret_cast<char*>(fileData.data()), fileSize);//全部按照uint8_t读入
+    inputFile.read(reinterpret_cast<char*>(fileData), fileSize);//全部按照uint8_t读入
     inputFile.close();
 
-    uint8_t* inPtrs = fileData.data();
+    uint8_t* inPtrs = fileData;
 
     batchSize = fileSize;
 
@@ -37,8 +38,8 @@ void compressFileWithANS(
     uint32_t* compressedWords_host_prefix = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
     uint32_t* compressedWordsPrefix_host = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
     std::cout<<"encode start!"<<std::endl;
-    double comp_time = 0.0;
-    for(int i = 0; i < 11; i ++){
+    double comp_time = 9999999;
+    for(int i = 0; i < 6; i ++){
     auto start = std::chrono::high_resolution_clock::now();  
 
     ansEncode(
@@ -58,11 +59,12 @@ void compressFileWithANS(
         compressedWordsPrefix_host);
 
     auto end = std::chrono::high_resolution_clock::now();
-    if(i > 5)
-      comp_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;  
+   // if(i > 5)
+   if(comp_time > std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3)
+      comp_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;  
     }
-    double c_bw = ( 1.0 * fileSize / 1e6 ) / ( (comp_time / 5.0) * 1e-3 );  
-    std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time / 5.0 << " ms B/W "   
+    double c_bw = ( 1.0 * fileSize / 1e6 ) / ( (comp_time) * 1e-3 );  
+    std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time  << " ms B/W "   
                   << std::fixed << std::setprecision(1) << c_bw << " MB/s " << std::endl;
 
     std::ofstream outputFile(tempFilePath, std::ios::binary);

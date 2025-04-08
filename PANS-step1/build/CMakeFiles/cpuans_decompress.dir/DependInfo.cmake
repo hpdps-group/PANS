@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/home/yangjinwu/PANS-step1/decompress.cpp" "CMakeFiles/cpuans_decompress.dir/decompress.cpp.o" "gcc" "CMakeFiles/cpuans_decompress.dir/decompress.cpp.o.d"
+  "/home/gyd/PANS_test/PANS-step1/decompress.cpp" "CMakeFiles/cpuans_decompress.dir/decompress.cpp.o" "gcc" "CMakeFiles/cpuans_decompress.dir/decompress.cpp.o.d"
   )
 
 # Targets to which this target links.
