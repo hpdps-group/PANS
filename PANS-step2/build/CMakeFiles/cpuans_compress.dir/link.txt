@@ -1,1 +1,0 @@
-/opt/rh/devtoolset-9/root/usr/bin/c++  -pthread -mavx2 -mavx512f -mavx512cd -mavx512vl -mavx512bw -fopenmp -march=native CMakeFiles/cpuans_compress.dir/compress.cpp.o -o cpuans_compress  -fopenmp -lgomp /lib64/libpthread.so 

@@ -1,4 +1,0 @@
-/home/gyd/PANS_test/PANS-step1/build/CMakeFiles/cpuans_compress.dir
-/home/gyd/PANS_test/PANS-step1/build/CMakeFiles/cpuans_decompress.dir
-/home/gyd/PANS_test/PANS-step1/build/CMakeFiles/edit_cache.dir
-/home/gyd/PANS_test/PANS-step1/build/CMakeFiles/rebuild_cache.dir
