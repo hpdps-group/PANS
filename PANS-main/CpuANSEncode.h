@@ -98,7 +98,7 @@ void ansHistogram_v0(
       // }
     
 
-    if (size < 100000 || !multithread) {
+    if (size < 45 * 100000 || !multithread) {
         alignas(64) uint32_t localHist[kNumSymbols] = {0};
         processBlock(in, size, localHist);
         
