@@ -211,7 +211,7 @@ void ansHistogram_v1(
     bool multithread = true) {
     std::memset(out, 0, kNumSymbols * sizeof(uint32_t));
 
-    if (size < 100000 || !multithread) {
+    if (size < 45 * 100000 || !multithread) {
         alignas(64) uint32_t localHist[kNumSymbols] = {0};
         processBlock_v1(in, size, localHist);
         for (int i = 0; i < kNumSymbols; ++i) {
