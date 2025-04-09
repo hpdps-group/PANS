@@ -41,7 +41,7 @@ void ansDecodeKernel_opti(
     void* in,
     void* out
     ) {
-  int num_threads = 16;
+  int num_threads = 32;
   auto headerIn = (ANSCoalescedHeader*)in;
   auto opdf = headerIn->getSymbolProbs();
   // __builtin_prefetch(opdf, 0, 3);
