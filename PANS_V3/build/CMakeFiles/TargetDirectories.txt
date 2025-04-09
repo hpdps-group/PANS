@@ -1,0 +1,4 @@
+/home/tdw/PANS_test/PANS-main/build/CMakeFiles/cpuans_compress.dir
+/home/tdw/PANS_test/PANS-main/build/CMakeFiles/cpuans_decompress.dir
+/home/tdw/PANS_test/PANS-main/build/CMakeFiles/edit_cache.dir
+/home/tdw/PANS_test/PANS-main/build/CMakeFiles/rebuild_cache.dir
