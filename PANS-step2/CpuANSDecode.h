@@ -17,7 +17,7 @@ void ansDecodeKernel(
     void* in,
     void* out
     ) {
-  int num_threads = 16;
+  int num_threads = 32;
   auto headerIn = (ANSCoalescedHeader*)in;
   auto opdf = headerIn->getSymbolProbs();
   std::vector<uint32_t> ocdf(kNumSymbols);

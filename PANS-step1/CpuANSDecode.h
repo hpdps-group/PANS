@@ -39,7 +39,7 @@ void ansDecodeKernel_opti(
   auto numBlocks = header.getNumBlocks();
   auto totalUncompressedWords = header.getTotalUncompressedWords();
 
-  int num_threads = 16;
+  int num_threads = 32;
   #pragma omp parallel num_threads(num_threads)
   {
     int thread_id = omp_get_thread_num();
