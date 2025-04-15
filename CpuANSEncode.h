@@ -388,7 +388,8 @@ void ansCalcWeights(
     uint32_t pp = symPdf[0];
     probsOut[0] = pp;
     uint32_t shift0 = 32 - __builtin_clz(pp - 1);
-    uint64_t magic0 = ((1ULL << 32) * ((1ULL << shift0) - pp)) / pp + 1;
+    uint64_t magic0 = 0.0;
+    if(pp!=0) magic0 = ((1ULL << 32) * ((1ULL << shift0) - pp)) / pp + 1;
     table[0] = {pp, 0, static_cast<uint32_t>(magic0), shift0
     // , uint16_t(one_bits - pp)
     };
