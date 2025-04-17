@@ -131,6 +131,7 @@ __device__ void histogramSingle(
   if (sum) {
     atomicAdd(&out[threadIdx.x], sum);
   }
+  return;
 }
 
 template <
@@ -146,6 +147,7 @@ __global__ void histogramBatch(
   //printf("insize: %d\n", inSize_dev);
   histogramSingle<Threads>(
       (const ANSDecodedT*)in_dev, inSize_dev, out);
+  return;
 }
 
 // sum that allows passing in smem for usage, so as to avoid a trailing
@@ -379,7 +381,7 @@ __device__ void normalizeProbabilitiesFromHistogram(
     int curSym = tid * kNumSymPerThread + i;
     table[curSym] = uint4{symPdf[i], symCdf[i], magic[i], shift[i]};
   }
-  
+  return;
 }
 
 template <
@@ -401,6 +403,7 @@ __global__ void quantizeWeights(
       table
       // + batch * kNumSymbols
       );
+  return;
 
   // if(threadIdx.x == 0)
   // {
@@ -448,6 +451,7 @@ void ansHistogramBatch(
           inSize_dev, 
           histogram_dev);
   }
+  return;
 }
 
 //template <typename SizeProvider>
@@ -469,6 +473,7 @@ inline void ansCalcWeights(
   //SizeProvider, 
   kThreads><<<1, kThreads, 0, stream>>>(
       histogram_dev, inSize_dev, probBits, table_dev);
+  return;
   // uint4 table[kNumSymbols];
   // hipMemcpy(table, table_dev, sizeof(uint4) * kNumSymbols, hipMemcpyDeviceToHost);
   //   for(int i = 0; i < kNumSymbols; i ++){

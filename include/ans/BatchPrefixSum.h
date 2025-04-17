@@ -54,6 +54,7 @@ __global__ void batchExclusivePrefixSum1(
   if (threadIdx.x == 0 && blockTotal) {
     ((T*)blockTotal)[batch * blocksInBatch + block] = total;
   }
+  return;
 }
 
 // Single block that performs the cross-block prefix sum
@@ -76,6 +77,7 @@ __global__ void batchExclusivePrefixSum2(
   if (valid) {
     ((T*)blockTotal)[batch * blocksInBatch + tid] = v;
   }
+  return;
 }
 
 template <typename T, int Threads>
@@ -98,6 +100,7 @@ __global__ void batchExclusivePrefixSum3(
   if (valid) {
     out[totalIdx] += vBlock;
   }
+  return;
 }
 
 inline size_t getBatchExclusivePrefixSumTempSize(
@@ -181,6 +184,7 @@ void batchExclusivePrefixSum(
 #undef BPS_LEVEL_3
 #undef BPS_LEVEL_2
 #undef BPS_LEVEL_1
+return;
 }
 
 } 

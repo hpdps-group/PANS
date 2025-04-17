@@ -188,6 +188,7 @@ void streamWaitBase(const L1& listWaiting, const L2& listWaitOn) {
   for (auto& event : events) {
     CUDA_VERIFY(hipEventDestroy(event));
   }
+  return;
 }
 
 /// These versions allow usage of initializer_list as arguments, since
@@ -195,17 +196,20 @@ void streamWaitBase(const L1& listWaiting, const L2& listWaitOn) {
 template <typename L1>
 void streamWait(const L1& a, const std::initializer_list<hipStream_t>& b) {
   streamWaitBase(a, b);
+  return;
 }
 
 template <typename L2>
 void streamWait(const std::initializer_list<hipStream_t>& a, const L2& b) {
   streamWaitBase(a, b);
+  return;
 }
 
 inline void streamWait(
     const std::initializer_list<hipStream_t>& a,
     const std::initializer_list<hipStream_t>& b) {
   streamWaitBase(a, b);
+  return;
 }
 
 std::string errorToString(hipError_t err) {
@@ -225,6 +229,7 @@ int getCurrentDevice() {
 
 void setCurrentDevice(int device) {
   CUDA_VERIFY(hipSetDevice(device));
+  return;
 }
 
 int getNumDevices() {
@@ -241,10 +246,12 @@ int getNumDevices() {
 
 void profilerStart() {
   // CUDA_VERIFY(hipProfilerStart());
+  return;
 }
 
 void profilerStop() {
   // CUDA_VERIFY(hipProfilerStop());
+  return;
 }
 
 void synchronizeAllDevices() {
@@ -253,6 +260,7 @@ void synchronizeAllDevices() {
 
     CUDA_VERIFY(hipDeviceSynchronize());
   }
+  return;
 }
 
 const hipDeviceProp_t& getDeviceProperties(int device) {

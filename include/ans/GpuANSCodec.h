@@ -98,15 +98,18 @@ struct __align__(32) ANSCoalescedHeader {
 
   __host__ __device__ void setNumBlocks(uint32_t nb) {
     numBlocks = nb;
+    return;
   }
 
   __host__ __device__ void setMagicAndVersion() {
     magicAndVersion = (kANSMagic << 16) | kANSVersion;
+    return;
   }
 
   __host__ __device__ void checkMagicAndVersion() const {
     assert((magicAndVersion >> 16) == kANSMagic);
     assert((magicAndVersion & 0xffffU) == kANSVersion);
+    return;
   }
 
   __host__ __device__ uint32_t getTotalUncompressedWords() const {
@@ -115,6 +118,7 @@ struct __align__(32) ANSCoalescedHeader {
 
   __host__ __device__ void setTotalUncompressedWords(uint32_t words) {
     totalUncompressedWords = words;
+    return;
   }
 
   __host__ __device__ uint32_t getTotalCompressedWords() const {
@@ -123,6 +127,7 @@ struct __align__(32) ANSCoalescedHeader {
 
   __host__ __device__ void setTotalCompressedWords(uint32_t words) {
     totalCompressedWords = words;
+    return;
   }
 
   __host__ __device__ uint32_t getProbBits() const {
@@ -132,6 +137,7 @@ struct __align__(32) ANSCoalescedHeader {
   __host__ __device__ void setProbBits(uint32_t bits) {
     assert(bits <= 0xf);
     options = (options & 0xfffffff0U) | bits;
+    return;
   }
 
   __host__ __device__ bool getUseChecksum() const {
@@ -140,6 +146,7 @@ struct __align__(32) ANSCoalescedHeader {
 
   __host__ __device__ void setUseChecksum(bool uc) {
     options = (options & 0xffffffef) | (uint32_t(uc) << 4);
+    return;
   }
 
   __host__ __device__ uint32_t getChecksum() const {
@@ -148,6 +155,7 @@ struct __align__(32) ANSCoalescedHeader {
 
   __host__ __device__ void setChecksum(uint32_t c) {
     checksum = c;
+    return;
   }
 
   __device__ uint16_t* getSymbolProbs() {
@@ -248,10 +256,12 @@ struct BatchWriter {
 
   inline __device__ void setBlock(uint32_t block) {
     outBlock_ = out_ + block * kDefaultBlockSize;
+    return;
   }
 
   inline __device__ void write(uint32_t offset, uint8_t sym) {
     outBlock_[offset] = sym;
+    return;
   }
 
   uint8_t* out_;

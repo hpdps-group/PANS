@@ -41,6 +41,7 @@ unpackDecodeLookup(uint32_t v, uint32_t& sym, uint32_t& pdf, uint32_t& cdf) {
   pdf = v & 0xfffU;
   v >>= 12;
   cdf = v;
+  return;
 }
 
 template <int ProbBits>
@@ -88,6 +89,7 @@ __device__ void decodeOneWarp(
 
   // how many values we actually read from the compressed input
   outNumRead = __popcll(vote);
+  return;
 }
 
 template <int ProbBits>
@@ -137,6 +139,7 @@ __device__ void decodeOnePartialWarp(
 
   // how many values we actually read from the compressed input
   outNumRead = __popcll(vote);
+  return;
 }
 
 template <int ProbBits>
@@ -195,6 +198,7 @@ __device__ void ansDecodeWarpBlock(
     compressedOffset -= numCompressedRead;
     // in -= numCompressedRead;
   }
+  return;
 }
 
 template <
@@ -302,6 +306,7 @@ __global__ __launch_bounds__(128) void ansDecodeKernel(
           lookup);
     }
   }
+  return;
 }
 
 template <
@@ -377,6 +382,7 @@ __global__ void ansDecodeTable(
           j - begin); // within-bucket cdf
     }
   }
+  return;
 }
 
 void ansDecode(
@@ -457,6 +463,7 @@ void ansDecode(
   }
 
   CUDA_TEST_ERROR();
+  return;
 }
 
 }

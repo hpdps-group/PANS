@@ -179,6 +179,7 @@ __global__ void ansEncodeBatch(
     //assert(outWord <= getRawCompBlockMaxSize(blockSize) / sizeof(ANSEncodedT));
     compressedWords_dev[grim_warp_numid] = outOffset;
   }
+  return;
 }
 
 template <typename A, int B>
@@ -302,6 +303,7 @@ __global__ void ansEncodeCoalesceBatch(
   for (uint32_t i = tid; i < limitEnd; i += Threads) {
     outT[i] = inT[i];
   }
+  return;
 }
 
 void ansEncode(
@@ -424,6 +426,7 @@ void ansEncode(
   }
 
   CUDA_TEST_ERROR();
+  return;
 }
 
 } // namespace 
