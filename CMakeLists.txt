@@ -25,8 +25,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 #hip_add_library
-add_library
-(gpu_ans SHARED
+add_library(gpu_ans SHARED
   src/GpuANS.cpp
 )
 
@@ -50,14 +49,12 @@ target_include_directories(gpu_ans
 )
 
 # hip_add_executable
-add_library
-(hipans_compress examples/compress.cpp)
+add_library(hipans_compress examples/compress.cpp)
 target_link_libraries(hipans_compress
         gpu_ans)
 
 # hip_add_executable
-add_library
-(hipans_decompress examples/decompress.cpp)
+add_library(hipans_decompress examples/decompress.cpp)
 target_link_libraries(hipans_decompress
         gpu_ans)
         
