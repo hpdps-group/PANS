@@ -6,10 +6,11 @@
 #set(CMAKE_MODULE_PATH "/usr/local/python3/lib/python3.8/site-packages/torch/cmake/modules" ${CMAKE_MODULE_PATH})
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_CXX_COMPILER /usr/bin/hipcc)
-set(CMAKE_CXX_LINKER /usr/bin/hipcc)
+set(CMAKE_CXX_COMPILER /opt/dtk-25.04/bin/hipcc)
+set(CMAKE_CXX_LINKER /opt/dtk-25.04/bin/hipcc)
 project(hipANS LANGUAGES HIP CXX VERSION 1.0)
-        
+
+set(CMAKE_CXX_STANDARD 14)
 if(NOT DEFINED HIP_PATH)
 if(NOT DEFINED ENV{HIP_PATH})
 set(HIP_PATH "/opt/rocm/hip" CACHE PATH "Path to which HIP has been installed")
