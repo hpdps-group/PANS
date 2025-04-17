@@ -67,6 +67,7 @@ void decompressFileWithANS(
     hipMemcpy(unCompressData.data(),decPtrs,batchSize*sizeof(uint8_t),hipMemcpyDeviceToHost);
     outFile.write(reinterpret_cast<const char*>(unCompressData.data()), batchSize*sizeof(uint8_t));
     outFile.close();
+    return;
 }
 
 int main(int argc, char* argv[]) {
