@@ -102,13 +102,16 @@ void ansCalcWeights(
     for(int i = 0; i < kNumSymbols; i ++){
       symPdf[tidSymbol[i]] = qProb[i];
     }
+    
     std::vector<uint32_t> cdf(kNumSymbols, 0);
+    cdf[0] = 0;
     for (int i = 0; i < kNumSymbols; ++i) {
         uint32_t p = symPdf[i];
         uint32_t shift = 32 - __builtin_clz(p - 1);
         uint64_t magic = 0.0;
         if(p != 0)
          magic = ((1ULL << 32) * ((1ULL << shift) - p)) / p + 1;
+        if(i != 0)
         cdf[i] = cdf[i-1] + symPdf[i-1];
         table[i] = {p, cdf[i], static_cast<uint32_t>(magic), shift};
     }
@@ -122,7 +125,7 @@ void ansEncodeBatch(
     uint32_t uncoalescedBlockStride,
     uint8_t* compressedBlocks_dev,
     uint32_t* compressedWords_dev,
-    uint32_t* compressedWordsPrefix_host,
+    uint32_t* compressedWords_host_prefix,
     const uint4* table) {
     ANSStateT kStateCheckMul = kANSStateBits - ProbBits;
     for(int l = 0; l < maxNumCompressedBlocks; l ++){
@@ -201,6 +204,7 @@ void ansEncodeBatch(
     outBlock->warpState[i] = state[i];
   }
   compressedWords_dev[l] = outOffset;
+  compressedWords_host_prefix[l] = roundUp(outOffset, kBlockAlignment / sizeof(ANSEncodedT));
   }
 }
 
@@ -299,10 +303,13 @@ void ansEncode(
       inSize,
       tempHistogram,
       table);
-
+  // for(int i = 0; i < kNumSymbols; i ++){
+  //   printf("table.x: %d, table.y: %d, table.z: %d, table.w: %d\n", table[i].x, table[i].y, table[i].z, table[i].w);
+  // }
   uint32_t uncoalescedBlockStride = getMaxBlockSizeUnCoalesced(kDefaultBlockSize);
   uint8_t* compressedBlocks_host = (uint8_t*)malloc(sizeof(uint8_t) * maxNumCompressedBlocks * uncoalescedBlockStride);
   uint32_t* compressedWords_host = (uint32_t*)malloc(sizeof(uint32_t) * maxNumCompressedBlocks);
+  uint32_t* compressedWords_host_prefix = (uint32_t*)std::aligned_alloc(kBlockAlignment, sizeof(uint32_t) * maxNumCompressedBlocks);
   uint32_t* compressedWordsPrefix_host = (uint32_t*)malloc(sizeof(uint32_t) * maxNumCompressedBlocks);
 
 #define RUN_ENCODE(BITS)                                       \
@@ -314,7 +321,7 @@ void ansEncode(
             uncoalescedBlockStride,                            \
             compressedBlocks_host,                       \
             compressedWords_host,         \
-            compressedWordsPrefix_host,                       \
+            compressedWords_host_prefix,                       \
             table);                                 \
   } while (false)
 
@@ -337,7 +344,7 @@ void ansEncode(
   if (maxNumCompressedBlocks > 0) {
     compressedWordsPrefix_host[0] = 0;
     for(int i = 1; i < maxNumCompressedBlocks; i ++){
-      compressedWordsPrefix_host[i] = compressedWordsPrefix_host[i - 1] + compressedWords_host[i - 1];
+      compressedWordsPrefix_host[i] = compressedWordsPrefix_host[i - 1] + compressedWords_host_prefix[i - 1];
     }
   }  
 
