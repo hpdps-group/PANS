@@ -49,12 +49,12 @@ target_include_directories(gpu_ans
 )
 
 # hip_add_executable
-add_library(hipans_compress examples/compress.cpp)
+add_executable(hipans_compress examples/compress.cpp)
 target_link_libraries(hipans_compress
         gpu_ans)
 
 # hip_add_executable
-add_library(hipans_decompress examples/decompress.cpp)
+add_executable(hipans_decompress examples/decompress.cpp)
 target_link_libraries(hipans_decompress
         gpu_ans)
         
