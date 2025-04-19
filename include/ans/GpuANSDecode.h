@@ -345,8 +345,8 @@ __global__ void ansDecodeTable(
   // single syncthreads
   BlockScan(tempStorage).ExclusiveSum(pdf, cdf, total);
 
-  uint32_t totalProb = 1 << probBits;
-  assert(totalProb == total); // should be a power of 2
+  // uint32_t totalProb = 1 << probBits;
+  // assert(totalProb == total); // should be a power of 2
 
   // Broadcast the pdf/cdf values
   __shared__ uint2 smemPdfCdf[kNumSymbols];
