@@ -58,7 +58,7 @@ void processBlock(const __restrict uint8_t* in, uint32_t size, uint32_t* __restr
     const uint8_t* tail = alignedIn + numChunks * kAlign;
     uint32_t remainingTail = remaining % kAlign;
     
-    if (remainingTail >= 8) {
+    while (remainingTail >= 8) {
         const uint8_t* chunk = tail;
         ++localHist[chunk[0]]; ++localHist[chunk[1]]; 
         ++localHist[chunk[2]]; ++localHist[chunk[3]];
