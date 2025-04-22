@@ -183,7 +183,7 @@ void processBlock_v1(const uint8_t* in, uint32_t size, uint32_t* localHist) {
     const uint8_t* tail = alignedIn + numChunks * kAlign;
     uint32_t remainingTail = remaining % kAlign;
     
-    if (remainingTail >= 8) {
+    while(remainingTail >= 8) {
         ++localHist[tail[0]]; ++localHist[tail[1]];
         ++localHist[tail[2]]; ++localHist[tail[3]];
         ++localHist[tail[4]]; ++localHist[tail[5]];
