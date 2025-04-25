@@ -214,9 +214,10 @@ void ansHistogram_v1(
     if (size < 45 * 100000 || !multithread) {
         alignas(64) uint32_t localHist[kNumSymbols] = {0};
         processBlock_v1(in, size, localHist);
-        for (int i = 0; i < kNumSymbols; ++i) {
-            out[i] += localHist[i];
-        }
+        // for (int i = 0; i < kNumSymbols; ++i) {
+        //     out[i] += localHist[i];
+        // }
+        memcpy(out, localHist, kNumSymbols * sizeof(uint32_t));
         return;
     }
 
