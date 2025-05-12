@@ -45,15 +45,22 @@ include_directories(${torch_npu_path}/include)   # 设置引用libtorch_npu的�
 link_directories(${torch_npu_path}/lib)          # 设置引用libtorch_npu的库文件路径
 
 # ascendc_library use to add kernel file to generate ascendc library
-ascendc_library(kernels STATIC
-    hello_world.cpp
+ascendc_library(hans_compress STATIC
+    hans_compress.cpp
+)
+ascendc_library(hans_decompress STATIC
+    hans_decompress.cpp
 )
 
-add_executable(main main_test.cpp)
+add_executable(compress compress.cpp)
+add_executable(decompress decompress.cpp)
 
-target_link_libraries(main PRIVATE
-    kernels
+target_link_libraries(compress PRIVATE
+    hans_compress
     # "${TORCH_LIBRARIES}"
-    torch_npu
+    # torch_npu
     # "${TORCH_NPU_LIBRARIES}"
+)
+target_link_libraries(decompress PRAVITE
+    hans_decompress
 )
