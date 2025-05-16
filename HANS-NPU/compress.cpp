@@ -108,6 +108,20 @@ int main(int32_t argc, char* argv[])
     CHECK_ACL(aclrtCreateContext(&context, deviceId));
     aclrtStream stream = nullptr;
     CHECK_ACL(aclrtCreateStream(&stream));
+    aclrtDeviceProperties deviceProps;
+    CHECK_ACL(aclrtGetDeviceProperties(&deviceProps, deviceId));
+    int maxComputeUnits = deviceProps.maxComputeUnits;
+
+    // 输出最大Block数目相关信息
+    std::cout << "设备名称: " << deviceProps.name << std::endl;
+    std::cout << "每个SM的最大Block数目: " << deviceProps.maxBlockPerSM << std::endl;
+    std::cout << "SM总数: " << deviceProps.multiProcessorCount << std::endl;
+    std::cout << "每个Block的最大线程数: " << deviceProps.maxThreadsPerBlock << std::endl;
+
+    // 计算理论最大Block数目（需根据任务需求调整）
+    int maxBlocks = deviceProps.maxBlockPerSM * deviceProps.multiProcessorCount;
+    std::cout << "理论最大Block数目（全SM）: " << maxBlocks << std::endl;
+
 
     uint8_t *srcHost, *compresedHost;
     uint8_t *srcDevice, *compressedDevice;
