@@ -13,9 +13,9 @@ constexpr uint32_t TILE_NUM = 32;
 // constexpr uint32_t HISTOGRAM_ADD_NUM = 5;
 
 template<typename T>
-class ExtractBits1Kernel {
+class Extractbits_and_histogramKernel {
 public:
-    __aicore__ inline ExtractBits1Kernel() {} // 切分数据，分离指数位，同时进行histogram统计
+    __aicore__ inline Extractbits_and_histogramKernel() {} // 切分数据，分离指数位，同时进行histogram统计
     // 输入：uint16_t数组(两两组成一个int32_t)
     // 输出：指数数组（int32_t），尾数+sign数组（uint8_t)，histogram统计数组（int32_t）
 
@@ -251,7 +251,7 @@ private:
     }
 
 private:
-    TPipe pipe;
+    TPipe* pipe;
     TQue<QuePosition::VECIN, 1> inQueue;
     TQue<QuePosition::VECOUT, 1> e_outQueue;
     TQue<QuePosition::VECOUT, 1> m_s_outQueue;
@@ -279,18 +279,6 @@ private:
     uint32_t blockElements;//以sizeof(T)为单位的数据量
     uint32_t tileNum;
 };
-
-extern "C" __global__ __aicore__ void kernel_ExtractBits1(GM_ADDR inGm, GM_ADDR eGm0, GM_ADDR eGm1, GM_ADDR msGm, GM_ADDR hist, uint32_t length)
-{
-    ExtractBits1Kernel<uint32_t> op; 
-    op.Init(inGm, eGm0, eGm1, msGm, hist, length);
-    op.Process();
-}
-
-void ExtractBits1_do(uint32_t blockDim, void *stream, uint8_t *inGm, uint8_t *eGm0, uint8_t *eGm1, uint8_t *msGm, uint8_t* hist, uint32_t length)
-{
-    kernel_ExtractBits1<<<blockDim, nullptr, stream>>>(inGm, eGm0, eGm1, msGm, hist, length);
-}
 
 // mask0 : 0b 00000000 00000000 00000000 00000000
 // mask1 : 0b 00000000 00000000 00000000 00000001 
@@ -412,9 +400,7 @@ public:
         mbl_output.SetGlobalBuffer((__gm__ uint8_t*)(final + 16 + HISTOGRAM_BINS));
         e_output.SetGlobalBuffer((__gm__ uint8_t*)(final + 16 + HISTOGRAM_BINS + 32 * blockNum + 2048 * blockNum));
 
-        // 初始化Pipe缓冲区，每个Tile大小TILE_LEN
-        pipe.InitBuffer(inQueue, BUFFER_NUM, TILE_LEN * sizeof(T));
-        // pipe.InitBuffer(mbl_outQueue, BUFFER_NUM, TILE_LEN * sizeof(uint8_t));
+        pipe.InitBuffer(inQueue, BUFFER_NUM, TILE_LEN * sizeof(T));// 初始化Pipe缓冲区，每个Tile大小TILE_LEN
         pipe.InitBuffer(e_outQueue, BUFFER_NUM, TILE_LEN * sizeof(uint8_t));
     }
 
@@ -449,19 +435,22 @@ public:
         pipe.InitBuffer(max_bits_length, TILE_LEN * sizeof(uint32_t));
         LocalTensor<uint32_t> mblLocal = max_bits_length.Get<uint32_t>();
 
+        LocalTensor<uint16_t> e_outLocal = e_outQueue.AllocTensor<uint16_t>();
+
         for(uint32_t i = blockId; i < blockNum; i += blockNum){
             uint32_t offset0 = i * DATA_BLOCK_BYTE_NUM;
             end = min((int)offset0 + DATA_BLOCK_BYTE_NUM, (int)totalUncompressedBytes);
             this->blockDataBytesSize = end - offset0;
             uint32_t compressedSize = 0;
+            uint32_t remainder = 0;
+            uint32_t thisTileCompressedSize = 0;
+            bool is = 0;
             for(uint32_t tileIdx = 0; tileIdx < TILE_NUM; ++tileIdx){
                 uint32_t offset1 = tileIdx * TILE_LEN;
                 uint32_t len = min(TILE_LEN, blockDataBytesSize - offset1);
                 CopyIn(offset0 + offset1, len);
-                Compute(tileIdx, compressedSize, tableLocal, blLocal, byteoffsetLocal, bitsoffsetLocal, tempLocal0, tempLocal1, tempLocal2, tempLocal3, mblLocal);
-                //当输出块到了32字节就copy到GM
-                uint32_t offset2 = ;
-                CopyOut(offset0 + offset1, len);
+                Compute(is ,tileIdx, compressedSize, remainder, thisTileCompressedSize, mblLocal, e_outLocal[compressedSize], tableLocal, blLocal, byteoffsetLocal, bitsoffsetLocal, tempLocal0, tempLocal1, tempLocal2, tempLocal3);
+                CopyOut(is, offset0 + offset1, len);//当输出块到了32字节就copy到GM
             }
             DataCopy(mbl_output, mblLocal, TILE_NUM);// 每次DataCopy的数据是32字节的倍数
         }
@@ -573,7 +562,7 @@ private:
             Or(mergeLocal0, mergeLocal2, mergeLocal1[8], TILE_LEN * 2);//长度为16
 
             e_outLocal(8) = (uint16_t)mergeLocal0(0);
-            e_outLocal(9) = (uint16_t)mergeLocal(16);
+            e_outLocal(9) = (uint16_t)mergeLocal0(16);
         }
         else if(max_bits_length == 6){
             ShiftLeft(mergeLocal0, encodedData, (uint32_t)6, TILE_LEN);
@@ -595,12 +584,12 @@ private:
             ShiftLeft(mergeLocal1, mergeLocal0, (uint16_t)4, TILE_LEN);
             Or(mergeLocal2, mergeLocal0, mergeLocal1[4], TILE_LEN * 2);//长度为16
 
-            e_outLocal(8) = (uint16_t)mergeLocal(0);
-            e_outLocal(9) = (uint16_t)mergeLocal(8);
-            e_outLocal(10) = (uint16_t)mergeLocal(16);
-            e_outLocal(11) = (uint16_t)mergeLocal(24);
+            e_outLocal(8) = (uint16_t)mergeLocal2(0);
+            e_outLocal(9) = (uint16_t)mergeLocal2(8);
+            e_outLocal(10) = (uint16_t)mergeLocal2(16);
+            e_outLocal(11) = (uint16_t)mergeLocal2(24);
         }
-        else if(){
+        else if(max_bits_length == 7){
             ShiftLeft(mergeLocal0, encodedData, (uint32_t)7, TILE_LEN);
             Or(mergeLocal1, encodedData, mergeLocal0[1], TILE_LEN * 2);//长度为14
 
@@ -620,19 +609,19 @@ private:
             ShiftLeft(mergeLocal1, mergeLocal0, (uint16_t)4, TILE_LEN);
             Or(mergeLocal2, mergeLocal0, mergeLocal1[4], TILE_LEN * 2);//长度为24
 
-            e_outLocal(8) = (uint16_t)mergeLocal(0);
-            e_outLocal(9) = (uint16_t)mergeLocal(8);
-            e_outLocal(10) = (uint16_t)mergeLocal(16);
-            e_outLocal(11) = (uint16_t)mergeLocal(24);
+            e_outLocal(8) = (uint16_t)mergeLocal2(0);
+            e_outLocal(9) = (uint16_t)mergeLocal2(8);
+            e_outLocal(10) = (uint16_t)mergeLocal2(16);
+            e_outLocal(11) = (uint16_t)mergeLocal2(24);
 
             ShiftRight(mergeLocal0, mergeLocal2, (uint32_t)16, TILE_LEN);
             ShiftLeft(mergeLocal1, mergeLocal0, (uint16_t)4, TILE_LEN);
             Or(mergeLocal2, mergeLocal0, mergeLocal1[8], TILE_LEN * 2);//长度为16
 
-            e_outLocal(12) = (uint16_t)mergeLocal(0);
-            e_outLocal(13) = (uint16_t)mergeLocal(16);  
+            e_outLocal(12) = (uint16_t)mergeLocal2(0);
+            e_outLocal(13) = (uint16_t)mergeLocal2(16);  
         }
-        else if(){
+        else if(max_bits_length == 8){
             ShiftLeft(mergeLocal0, encodedData, (uint32_t)8, TILE_LEN);
             Or(mergeLocal1, encodedData, mergeLocal0[1], TILE_LEN * 2);//长度为16
 
@@ -655,8 +644,13 @@ private:
         }
     }
 
-    __aicore__ inline void Compute(uint32_t tileIdx,
+    __aicore__ inline void Compute(bool& is,
+                                   uint32_t tileIdx,
                                    uint32_t& compressedSize,
+                                   uint32_t& remainder,
+                                   uint32_t& thisTileCompressedSize,
+                                   LocalTensor<uint8_t>& mblLocal,
+                                   LocalTensor<uint16_t>& e_outLocal,
                                    LocalTensor<uint32_t>& tableLocal,
                                    LocalTensor<uint32_t>& blLocal,
                                    LocalTensor<uint32_t>& byteoffsetLocal,
@@ -664,30 +658,27 @@ private:
                                    LocalTensor<uint32_t>& tempLocal0,
                                    LocalTensor<uint32_t>& tempLocal1,
                                    LocalTensor<uint32_t>& tempLocal2,
-                                   LocalTensor<uint32_t>& tempLocal3
+                                   LocalTensor<uint32_t>& tempLocal3,
+                                   LocalTensor<uint32_t>& mergeLocal0,
+                                   LocalTensor<uint32_t>& mergeLocal1,
+                                   LocalTensor<uint32_t>& mergeLocal2
     ) {
 
         LocalTensor<T> e_inLocal = e_inQueue.DeQue<T>();
-        LocalTensor<uint8_t> mbl_outLocal = mbl_outQueue.AllocTensor<uint8_t>();
-        LocalTensor<uint8_t> e_outLocal = e_outQueue.AllocTensor<uint8_t>();
 
-        uint32_t mblSum = 0;
+        // uint32_t mblSum  = 0;
 
         And(tempLocal0, e_inLocal, mask2_tensor, len * 2);
         Gather(tempLocal1, table, tempLocal0, (uint32_t)0, len);//gather编码表
         Gather(tempLocal2, blLocal, tempLocal1, (uint32_t)0, len);//gather比特长度
         //求出最大截断bits长度，归约操作
-        // for(int i = TILE_LEN / 2; i > 0; i >> 1){
         Max(tempLocal3, tempLocal2, tempLocal2[16], 16);
         Max(tempLocal4, tempLocal3, tempLocal3[8], 8);
         Max(tempLocal2, tempLocal4, tempLocal4[4], 4);
         Max(tempLocal3, tempLocal2, tempLocal2[2], 2);
         Max(tempLocal4, tempLocal3, tempLocal3[1], 1);
         uint32_t max_bits_length0 = tempLocal4(0);
-        mblSum += max_bits_length0;
-        compressedSize = mblSum << 4;//字节为单位
-        Merge();
-        // }
+        Merge(max_bits_length0, tempLocal1, e_outLocal, mergeLocal0, mergeLocal1, mergeLocal2);
 
         ShiftRight(tempLocal0, e_inLocal, (uint32_t)16, len);
         Gather(tempLocal1, table, tempLocal0, (uint32_t)0, len);//gather编码表
@@ -698,45 +689,50 @@ private:
         Max(tempLocal3, tempLocal2, tempLocal2[2], 2);
         Max(tempLocal4, tempLocal3, tempLocal3[1], 1);
         uint32_t max_bits_length1 = tempLocal4(0);
-        mblSum += max_bits_length1;
-        compressedSize = mblSum << 4;
-        Merge();
+        Merge(max_bits_length1, tempLocal1, e_outLocal, mergeLocal0, mergeLocal1, mergeLocal2);
 
-        fo
-
+        // mblSum += max_bits_length0 + max_bit_length1;
+        thisTileCompressedSize = (max_bits_length0 + max_bits_length1) << 4;
+        remainder += thisTileCompressedSize;
+        if(remainder > 32){
+            remainder -= 32;
+            e_outQueue.EnQue(e_outLocal);
+            is = true;
+        }
+        compressedSize += thisTileCompressedSize;
         mbl_outLocal(tile_idx) = (max_bits_length1 << 4) | max_bits_length0;
 
         inQueue.FreeTensor(e_inLocal);
-        e_outQueue.EnQue(e_outLocal);
-        // mbl_outQueue.EnQue(mbl_outLocal);
     }
 
-    __aicore__ inline void CopyOut(uint32_t offset, uint32_t len) {
-        LocalTensor<uint8_t> e_outLocal = ecd_outQueue.DeQue<uint8_t>();
-        // 将结果拷贝回Global Memory
-        DataCopy(e_output[offset], e_outLocal, len);
-        e_outQueue.FreeTensor(e_outLocal);
+    __aicore__ inline void CopyOut(bool is, uint32_t offset, uint32_t len) {
+        if(is){
+            LocalTensor<uint16_t> e_outLocal = e_outQueue.DeQue<uint16_t>();//每次输出32字节，应该为16个uint16_t
+            DataCopy(e_output[offset], e_outLocal, TILE_LEN / 2);
+        }
+        return;
     }
 
 private:
-    TPipe pipe;
-    TQue<QuePosition::VECIN, 1> e_inQueue;
+    TPipe* pipe;
+    TQue<QuePosition::VECIN, 1> inQueue;
     TQue<QuePosition::VECOUT, 1> e_outQueue;
 
     TBuf<AscendC::TPosition::VECCALC> table;
     TBuf<AscendC::TPosition::VECCALC> bits_length;
-    TBuf<AscendC::TPosition::VECCALC> write_byte_offset;
-    TBuf<AscendC::TPosition::VECCALC> write_bits_offset;
     TBuf<AscendC::TPosition::VECCALC> calcBuf0;
     TBuf<AscendC::TPosition::VECCALC> calcBuf1;
     TBuf<AscendC::TPosition::VECCALC> calcBuf2;
     TBuf<AscendC::TPosition::VECCALC> calcBuf3;
     TBuf<AscendC::TPosition::VECCALC> max_bits_length;
     TBuf<AscendC::TPosition::VECCALC> writeBuf0;
-    TBuf<AscendC::TPosition::VECCA:C> writeBuf1;
+    TBuf<AscendC::TPosition::VECCALC> writeBuf1;
+    TBuf<AscendC::TPosition::VECCALC> writeBuf2;
 
     GlobalTensor<T> e_input;
     GlobalTensor<T> table_input;
+    GlobalTensor<uint32_t> bits_length;
+    GlobalTensor<uint8_t> mbl_output;
     GlobalTensor<uint8_t> output;
 
     uint32_t blockDataBytesSize;
@@ -744,20 +740,9 @@ private:
     uint32_t tileLength;
     uint32_t blockId;
     uint32_t blockNum;
+    uint32_t compressedSize;//当前压缩后的字节数
+    uint32_t totalCompressedSize;//最终压缩完的字节数
 };
-
-extern "C" __global__ __aicore__ void kernel_compress(GM_ADDR inGm, GM_ADDR eGm0, GM_ADDR eGm1, GM_ADDR msGm, GM_ADDR hist, uint32_t length)
-{
-    CompressKernel<uint32_t> op; 
-    op.Init(inGm, eGm0, eGm1, msGm, hist, length);
-    op.Process();
-}
-
-void compress_do(uint32_t blockDim, void *stream, uint8_t *inGm, uint8_t *eGm0, uint8_t *eGm1, uint8_t *msGm, uint8_t* hist, uint32_t length)
-{
-    kernel_ExtractBits1<<<blockDim, nullptr, stream>>>(inGm, eGm0, eGm1, msGm, hist, length);
-}
-
 
 template<typename T>
 class CoalesceKernel {
@@ -842,7 +827,7 @@ private:
     }
 
 private:
-    TPipe pipe;
+    TPipe* pipe;
     TQue<QuePosition::VECIN, BUFFER_NUM> inQueue_;
     TQue<QuePosition::VECOUT, BUFFER_NUM> e_outQueue;
     TQue<QuePosition::VECOUT, BUFFER_NUM> m_s_outQueue;
@@ -896,7 +881,7 @@ private:
     }
 
 private:
-    // TPipe pipe;
+    TPipe* pipe;
     TQueBind<TPosition::VECIN, TPosition::VECOUT, BUFFER_NUM> queBind;
 
     GlobalTensor<T> input;//输入每个数据块压缩后的GM地址
@@ -909,31 +894,13 @@ private:
     uint32_t dataBlockNum;
 };
 
-__global__ __aicore__ void comp(GM_ADDR e_input, GM_ADDR table, GM_ADDR max_bits_length, GM_ADDR compressed, GM_ADDR totalElements) {
-    // 获取总元素数
-    uint32_t total = *(reinterpret_cast<const uint32_t*>(totalElements));
-    uint32_t blockId = GetBlockIdx();
-    uint32_t blockNum = GetBlockNum();
-
-    uint32_t perBlock = (total + blockNum - 1) / blockNum;
-    uint32_t start = blockId * perBlock;
-    if(start >= total) return;
-    uint32_t end = min(start + perBlock, total);
-    uint32_t blockElements = end - start;
-
-    GlobalTensor<uint8_t> einputGm(e_input + start * sizeof(uint8_t));
-    GlobalTensor<uint8_t> tableinputGm(table);
-    GlobalTensor<uint8_t> eOutputGm(e_compressed + start * sizeof(uint8_t));
-    GlobalTensor<uint8_t> max_bits_lengthOutputGm();
-
-    CompressKernel<uint8_t> op;
-    op.Init(einputGm, tableinputGm, max_bits_length, eoutputGm, blockElements);
-    op.Process();
-}
-
-__global__ __aicore__ void coalesce(GM_ADDR input, GM_ADDR e_output, 
-                                                 GM_ADDR m_s_output, GM_ADDR totalElements) {
-    //
+__global__ __aicore__ void extractbits_and_histogram(...)
+{
+    ...
+    TPipe pipe;
+    KernelExample<float> op;
+    op.Init(..., &pipe);
+    ...
 }
 
 void* generate_table(int32_t* histogramDevice, uint32_t* table){
@@ -950,13 +917,40 @@ void* generate_table(int32_t* histogramDevice, uint32_t* table){
     }
 }
 
-extern "C" void compress(uint32_t blockNum, nullptr, void* stream, uint8_t* srcDevice, uint8_t* tempBuffer, uint8_t* final, int32_t* histogramDevice, uint32_t* compressedSize, uint32_t* compressedSizePrefix, uint32_t totalCompressedSize) {
+__global__ __aicore__ void comp(...)
+{
+    ...
     TPipe pipe;
-    extractbits_and_histogram<<<blockNum, nullptr, stream>>>(srcDevice, tempBuffer, final);//提取字节并计算直方图
+    KernelExample<float> op;
+    op.Init(..., &pipe);
+    ...
+}
+
+__global__ __aicore__ void calcprefix(...)
+{
+    ...
+    TPipe pipe;
+    KernelExample<float> op;
+    op.Init(..., &pipe);
+    ...
+}
+
+__global__ __aicore__ void coalesce(...)
+{
+    ...
+    TPipe pipe;
+    KernelExample<float> op;
+    op.Init(..., &pipe);
+    ...
+}
+
+extern "C" void compress(uint32_t blockNum, nullptr, void* stream, uint8_t* srcDevice, uint8_t* tempBuffer, uint8_t* final, int32_t* histogramDevice, uint32_t* compressedSize, uint32_t* compressedSizePrefix, uint32_t totalCompressedSize) {
+    // TPipe pipe;
+    extractbits_and_histogram<<<blockNum, nullptr, stream>>>(pipe, srcDevice, tempBuffer, final);//提取字节并计算直方图
     generate_table(histogramDevice, final + 16);//排序后table(uint8_t数组)直接写进final区域，uint32_t的histogram用于压缩
-    comp<<<blockNum, nullptr, stream>>>(tempBuffer, final, reinterpret_cast<uint8_t*>(histogramDevice), reinterpret_cast<uint8_t*>(compressedSize));//压缩函数
-    calcprefix<<<blockNum, nullptr, stream>>>(reinterpret_cast<uint8_t*>(compressedSize), reinterpret_cast<uint8_t*>(compressedSizePrefix));//计算前缀和，用于后续块合并，字节为单位，
-    coalesce<<<blockNum, nullptr, stream>>>(tempBuffer, final, reinterpret_cast<uint8_t*>(compressedSize), reinterpret_cast<uint8_t*>(compressedSizePrefix));//纯搬运内核
+    comp<<<blockNum, nullptr, stream>>>(pipe, tempBuffer, final, reinterpret_cast<uint8_t*>(histogramDevice), reinterpret_cast<uint8_t*>(compressedSize));//压缩函数
+    calcprefix<<<blockNum, nullptr, stream>>>(pipe, reinterpret_cast<uint8_t*>(compressedSize), reinterpret_cast<uint8_t*>(compressedSizePrefix));//计算前缀和，用于后续块合并，字节为单位，
+    coalesce<<<blockNum, nullptr, stream>>>(pipe, tempBuffer, final, reinterpret_cast<uint8_t*>(compressedSize), reinterpret_cast<uint8_t*>(compressedSizePrefix));//纯搬运内核
 }
 
 // // 注册算子
