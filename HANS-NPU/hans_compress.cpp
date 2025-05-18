@@ -111,43 +111,22 @@ public:
             uint32_t offset = tileIdx * TILE_LEN;
             uint32_t len = min((int)TILE_LEN, (int)(blockElements - offset));
             // uint32_t len = TILE_LEN;
-            CopyIn0(offset, len);
-            Compute0(len, mask0_tensor, mask1_tensor, mask2_tensor, mask3_tensor, mask4_tensor, all_one, offset_tensor, histogram, tempLocal0, tempLocal1, tempLocal2, tempLocal3, histTensor0, histTensor1);
-            CopyOut0(offset, len);
+            CopyIn(offset, len);
+            Compute(len, mask0_tensor, mask1_tensor, mask2_tensor, mask3_tensor, mask4_tensor, all_one, offset_tensor, histogram, tempLocal0, tempLocal1, tempLocal2, tempLocal3, histTensor0, histTensor1);
+            CopyOut(offset, len);
         }
-        MergeHistogram(histogram);// 合并32个temp直方图为最终的一个
-
-        uint32_t blockId = GetBlockIdx();
-        uint32_t blockNum = GetBlockNum();
-
-        for(uint32_t i = startoffset; i > 0; i << 1){
-            uint32_t offset = HISTOGRAM_BINS * i;
-            if(blockId < i){
-                CopyIn1(offset);
-                Compute1();
-                CopyOut1(offset);
-            }
-        }
+        MergeLocalHist(histogram);// 合并TILE_LEN个temp直方图为最终的一个
     }
 
 private:
-    __aicore__ inline void CopyIn0(uint32_t offset, uint32_t len) {
+    __aicore__ inline void CopyIn(uint32_t offset, uint32_t len) {
         LocalTensor<T> inLocal = inQueue.AllocTensor<T>();
-        
-        // 拷贝当前Tile数据到Local
+
         DataCopy(inLocal, input[offset], len);
         inQueue.EnQue(inLocal);
     }
 
-    __aicore__ inline void CopyIn1(uint32_t offset, uint32_t len) {
-        LocalTensor<T> inLocal = inQueue.AllocTensor<T>();
-        
-        // 拷贝当前Tile数据到Local
-        DataCopy(inLocal, input[offset], len);
-        inQueue.EnQue(inLocal);
-    }
-
-    __aicore__ inline void Compute0(uint32_t len,
+    __aicore__ inline void Compute(uint32_t len,
                                    LocalTensor<T>& mask0_tensor,
                                    LocalTensor<T>& mask1_tensor,
                                    LocalTensor<T>& mask2_tensor,
@@ -220,11 +199,7 @@ private:
         m_s_outQueue.EnQue(m_s_outLocal);
     }
 
-    __aicore__ inline void Compute0(){
-
-    }
-
-    __aicore__ inline void CopyOut0(uint32_t offset, uint32_t len) {
+    __aicore__ inline void CopyOut(uint32_t offset, uint32_t len) {
         LocalTensor<uint32_t> e_outLocal = e_outQueue.DeQue<uint32_t>();
         LocalTensor<uint32_t> m_s_outLocal = m_s_outQueue.DeQue<uint32_t>();
 
@@ -236,17 +211,12 @@ private:
         m_s_outQueue.FreeTensor(m_s_outLocal);
     }
 
-    __aicore__ inline void CopyOut0(){
-
-    }
-
-    __aicore__ inline void MergeHistogram(LocalTensor<int32_t>& histogram) {
-        
-        for (uint32_t i = 1; i < TILE_LEN; ++i) {
-            for (uint32_t bin = 0; bin < HISTOGRAM_BINS; ++bin) {
-                histogram(bin) += histogram(i * HISTOGRAM_BINS + bin);
-            }
-        }
+    __aicore__ inline void MergeLocalHist(LocalTensor<int32_t>& histogram) {
+        Add(histogram[0], histogram[0], histogram[16 * HISTOGRAM_BINS], (int32_t)HISTOGRAM_BINS);
+        Add(histogram[0], histogram[0], histogram[8 * HISTOGRAM_BINS], (int32_t)HISTOGRAM_BINS);
+        Add(histogram[0], histogram[0], histogram[4 * HISTOGRAM_BINS], (int32_t)HISTOGRAM_BINS);
+        Add(histogram[0], histogram[0], histogram[2 * HISTOGRAM_BINS], (int32_t)HISTOGRAM_BINS);
+        Add(histogram[0], histogram[0], histogram[1 * HISTOGRAM_BINS], (int32_t)HISTOGRAM_BINS);
         DataCopy(hist_output, histogram, HISTOGRAM_BINS);
     }
 
@@ -278,108 +248,78 @@ private:
 
     uint32_t blockElements;//以sizeof(T)为单位的数据量
     uint32_t tileNum;
+    uint32_t blockId;
+    uint32_t blockNum;
 };
 
-// mask0 : 0b 00000000 00000000 00000000 00000000
-// mask1 : 0b 00000000 00000000 00000000 00000001 
-// mask2 : 0b 00000000 00000000 00000000 11111111
-// mask3 : 0b 00000000 00000000 11111111 11111111
+template<typename T>
+class MergeHistogramKernel {
+public:
+    __aicore__ inline MergeHistogramKernel() {} // 合并block的直方图
+    // 输入：uint16_t数组(两两组成一个int32_t)
+    // 输出：指数数组（int32_t），尾数+sign数组（uint8_t)，histogram统计数组（int32_t）
 
-// write_mask_8_0 
-// 00000000 00000000 00000000 00000000 00000000 00000000 00000000 11111111
-// 00000000 00000000 00000000 00000000 00000000 00000000 00000000 11111111
-// 00000000 00000000 00000000 00000000 00000000 00000000 00000000 11111111
-// 00000000 00000000 00000000 00000000 00000000 00000000 00000000 11111111
+    __aicore__ inline void Init(__gm__ uint8_t* hist_in) {
+        uint32_t blockId = GetBlockIdx();
+        uint32_t blockNum = GetBlockNum();
 
-// write_mask_8_1 
-// 00000000 00000000 00000000 00000000 00000000 00000000 11111111 00000000
-// 00000000 00000000 00000000 00000000 00000000 00000000 11111111 00000000
-// 00000000 00000000 00000000 00000000 00000000 00000000 11111111 00000000
-// 00000000 00000000 00000000 00000000 00000000 00000000 11111111 00000000
+        input.SetGlobalBuffer((__gm__ uint32_t*)(hist_in));
+        output.SetGlobalBuffer((__gm__ uint32_t*)(hist_in));
 
-// write_mask_8_2
-// 00000000 00000000 00000000 00000000 00000000 11111111 00000000 00000000
-// 00000000 00000000 00000000 00000000 00000000 11111111 00000000 00000000
-// 00000000 00000000 00000000 00000000 00000000 11111111 00000000 00000000
-// 00000000 00000000 00000000 00000000 00000000 11111111 00000000 00000000
+        pipe.InitBuffer(inQueue0, BUFFER_NUM, TILE_LEN * sizeof(T));
+        pipe.InitBuffer(inQueue1, BUFFER_NUM, TILE_LEN * sizeof(T));
+        pipe.InitBuffer(outQueue, BUFFER_NUM, TILE_LEN * sizeof(uint32_t));
+    }
 
-// write_mask_8_3
-// 00000000 00000000 00000000 00000000 11111111 00000000 00000000 00000000
-// 00000000 00000000 00000000 00000000 11111111 00000000 00000000 00000000
-// 00000000 00000000 00000000 00000000 11111111 00000000 00000000 00000000
-// 00000000 00000000 00000000 00000000 11111111 00000000 00000000 00000000
+    __aicore__ inline void Process() {
+        for(int i = blockNum / 2; i >= 1; i >> 1){
+            if(blockId < i){
+                CopyIn(i);
+                Compute();
+                CopyOut();
+            }
+        }
+    }
 
-// write_mask_8_4
-// 00000000 00000000 00000000 11111111 00000000 00000000 00000000 00000000
-// 00000000 00000000 00000000 11111111 00000000 00000000 00000000 00000000
-// 00000000 00000000 00000000 11111111 00000000 00000000 00000000 00000000
-// 00000000 00000000 00000000 11111111 00000000 00000000 00000000 00000000
+private:
+    __aicore__ inline void CopyIn(uint32_t offset) {
+        LocalTensor<T> inLocal0 = inQueue0.AllocTensor<T>();
+        LocalTensor<T> inLocal1 = inQueue1.AllocTensor<T>();
+        DataCopy(inLocal0, hist_out[blockId * HISTOGRAM_BINS], HISTOGRAM_BINS);
+        DataCopy(inLocal1, hist_out[(blockId + offset) * HISTOGRAM_BINS], HISTOGRAM_BINS);
+        inQueue0.EnQue(inLocal0);
+        inQueue1.EnQue(inLocal1);
+    }
 
-// write_mask_8_5
-// 00000000 00000000 11111111 00000000 00000000 00000000 00000000 00000000
-// 00000000 00000000 11111111 00000000 00000000 00000000 00000000 00000000
-// 00000000 00000000 11111111 00000000 00000000 00000000 00000000 00000000
-// 00000000 00000000 11111111 00000000 00000000 00000000 00000000 00000000
+    __aicore__ inline void Compute(){
+        LocalTensor<T> inLocal0 = inQueue0.DeQue<T>();
+        LocalTensor<T> inLocal1 = inQueue1.DeQue<T>();
+        LocalTensor<T> outLocal = outQueue.DeQue<T>();
+        Add(outLocal, inLocal0, inLocal1, (int32_t)HISTOGRAM_BINS);
+        outQueue.EnQue<T>(outLocal);
+        inQueue.FreeTensor(inLocal);
+        outQueue.FreeTensor(outLocal);
+    }
 
-// write_mask_8_6
-// 00000000 11111111 00000000 00000000 00000000 00000000 00000000 00000000
-// 00000000 11111111 00000000 00000000 00000000 00000000 00000000 00000000
-// 00000000 11111111 00000000 00000000 00000000 00000000 00000000 00000000
-// 00000000 11111111 00000000 00000000 00000000 00000000 00000000 00000000
+    __aicore__ inline void CopyOut(){
+        LocalTensor<T> outLocal = outQueue.DeQue<T>();
+        DataCopy(outLocal, hist_out[blockId * HISTOGRAM_BINS], HISTOGRAM_BINS);
+        DeQue.FreeTensor(outLocal);
+    }
 
-// write_mask_8_7
-// 11111111 00000000 00000000 00000000 00000000 00000000 00000000 00000000
-// 11111111 00000000 00000000 00000000 00000000 00000000 00000000 00000000
-// 11111111 00000000 00000000 00000000 00000000 00000000 00000000 00000000
-// 11111111 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+private:
+    TPipe* pipe;
+    TQue<QuePosition::VECIN, 1> inQueue0;
+    TQue<QuePosition::VECIN, 1> inQueue1;
+    TQue<QuePosition::VECOUT, 1> outQueue;
 
-// write_mask_7_0 
-// 00000000 00000000 00000000 00000000 00000000 00000000 01111111
-// 00000000 00000000 00000000 00000000 00000000 00000000 01111111
-// 00000000 00000000 00000000 00000000 00000000 00000000 01111111
-// 00000000 00000000 00000000 00000000 00000000 00000000 01111111
+    GlobalTensor<T> input;
+    GlobalTensor<uint32_t> output;
 
-// write_mask_7_1 
-// 00000000 00000000 00000000 00000000 00000000 00111111 10000000
-// 00000000 00000000 00000000 00000000 00000000 00111111 10000000
-// 00000000 00000000 00000000 00000000 00000000 00111111 10000000
-// 00000000 00000000 00000000 00000000 00000000 00111111 10000000
+    uint32_t blockId;
+    uint32_t blockNum;
+};
 
-// write_mask_7_2
-// 00000000 00000000 00000000 00000000 00011111 11000000 00000000
-// 00000000 00000000 00000000 00000000 00011111 11000000 00000000
-// 00000000 00000000 00000000 00000000 00011111 11000000 00000000
-// 00000000 00000000 00000000 00000000 00011111 11000000 00000000
-
-// write_mask_7_3
-// 00000000 00000000 00000000 00001111 11100000 00000000 00000000
-// 00000000 00000000 00000000 00001111 11100000 00000000 00000000
-// 00000000 00000000 00000000 00001111 11100000 00000000 00000000
-// 00000000 00000000 00000000 00001111 11100000 00000000 00000000
-
-// write_mask_7_4
-// 00000000 00000000 00000111 11110000 00000000 00000000 00000000
-// 00000000 00000000 00000111 11110000 00000000 00000000 00000000
-// 00000000 00000000 00000111 11110000 00000000 00000000 00000000
-// 00000000 00000000 00000111 11110000 00000000 00000000 00000000
-
-// write_mask_7_5
-// 00000000 00000011 11111000 00000000 00000000 00000000 00000000
-// 00000000 00000011 11111000 00000000 00000000 00000000 00000000
-// 00000000 00000011 11111000 00000000 00000000 00000000 00000000
-// 00000000 00000011 11111000 00000000 00000000 00000000 00000000
-
-// write_mask_7_6
-// 00000001 11111100 00000000 00000000 00000000 00000000 00000000
-// 00000001 11111100 00000000 00000000 00000000 00000000 00000000
-// 00000001 11111100 00000000 00000000 00000000 00000000 00000000
-// 00000001 11111100 00000000 00000000 00000000 00000000 00000000
-
-// write_mask_7_7
-// 11111110 00000000 00000000 00000000 00000000 00000000 00000000 
-// 11111110 00000000 00000000 00000000 00000000 00000000 00000000 
-// 11111110 00000000 00000000 00000000 00000000 00000000 00000000 
-// 11111110 00000000 00000000 00000000 00000000 00000000 00000000 
 template<typename T>
 class CompressKernel {
 public:
@@ -390,18 +330,21 @@ public:
     __aicore__ inline void Init(__gm__ uint8_t* tempBuffer, //e_input
                                 __gm__ uint8_t* final, //output
                                 __gm__ uint8_t* histogramDevice, //table_input
-                                __gm__ uint8_t* compressedSize,
-                                uint32_t totalUncompressedBytes) {
-        this->blockId = GetBlockIdx();
-        this->blockNum = GetBlockNum();
+                                __gm__ uint8_t* bits_lengthDevice, // bits_length数组
+                                __gm__ uint8_t* compressedSize, // 用于保存每个数据块最后压缩完的块大小
+                                uint32_t totalUncompressedBytes // 保存全部未压缩数据的大小，用于分块拖尾处理
+                                ) {
+        this->blockId = GetBlockIdx(); //获取当前blockId
+        this->blockNum = GetBlockNum(); //获取当前blockNum
 
         e_input.SetGlobalBuffer((__gm__ uint32_t*)(tempBuffer));
         table_input.SetGlobalBuffer((__gm__ uint32_t*)(histogramDevice));
+        bits_length_input.SetGlobalBuffer((__gm__ uint32_t*)(bits_lengthDevice));
         mbl_output.SetGlobalBuffer((__gm__ uint8_t*)(final + 16 + HISTOGRAM_BINS));
         e_output.SetGlobalBuffer((__gm__ uint8_t*)(final + 16 + HISTOGRAM_BINS + 32 * blockNum + 2048 * blockNum));
 
         pipe.InitBuffer(inQueue, BUFFER_NUM, TILE_LEN * sizeof(T));// 初始化Pipe缓冲区，每个Tile大小TILE_LEN
-        pipe.InitBuffer(e_outQueue, BUFFER_NUM, TILE_LEN * sizeof(uint8_t));
+        pipe.InitBuffer(e_outQueue, BUFFER_NUM, DATA_BLOCK_BYTE_NUM / 2 * sizeof(uint8_t));
     }
 
     __aicore__ inline void Process() {
@@ -412,14 +355,6 @@ public:
         pipe.InitBuffer(bits_length, HISTOGRAM_BINS * sizeof(uint32_t));
         LocalTensor<uint32_t> blLocal = bits_length.Get<uint32_t>();
         DataCopy();
-
-        pipe.InitBuffer(write_byte_offset, TILE_LEN * sizeof(uint32_t));
-        LocalTensor<uint32_t> byteoffsetLocal = write_byte_offset.Get<uint32_t>();
-        DataCopy();
-
-        pipe.InitBuffer(write_bits_offset, TILE_LEN * sizeof(uint32_t));
-        LocalTensor<uint32_t> bitsoffsetLocal = write_bits_offset.Get<uint32_t>();
-        DataCopy(); 
 
         pipe.InitBuffer(calcBuf0, TILE_LEN * sizeof(uint32_t));
         pipe.InitBuffer(calcBuf1, TILE_LEN * sizeof(uint32_t));
@@ -448,16 +383,16 @@ public:
             for(uint32_t tileIdx = 0; tileIdx < TILE_NUM; ++tileIdx){
                 uint32_t offset1 = tileIdx * TILE_LEN;
                 uint32_t len = min(TILE_LEN, blockDataBytesSize - offset1);
-                CopyIn(offset0 + offset1, len);
+                CopyIn(offset0 + offset1);//输入队列每次都copy32字节
                 Compute(is ,tileIdx, compressedSize, remainder, thisTileCompressedSize, mblLocal, e_outLocal[compressedSize], tableLocal, blLocal, byteoffsetLocal, bitsoffsetLocal, tempLocal0, tempLocal1, tempLocal2, tempLocal3);
-                CopyOut(is, offset0 + offset1, len);//当输出块到了32字节就copy到GM
+                CopyOut(is, offset0 + offset1);//当输出块到了32字节就copy到GM
             }
             DataCopy(mbl_output, mblLocal, TILE_NUM);// 每次DataCopy的数据是32字节的倍数
         }
     }
 
 private:
-    __aicore__ inline void CopyIn(uint32_t offset, uint32_t len) {
+    __aicore__ inline void CopyIn(uint32_t offset) {
         LocalTensor<T> inLocal = inQueue.AllocTensor<T>();
         // 拷贝当前Tile数据到Local
         DataCopy(e_inLocal, e_input[offset], len);
@@ -653,8 +588,6 @@ private:
                                    LocalTensor<uint16_t>& e_outLocal,
                                    LocalTensor<uint32_t>& tableLocal,
                                    LocalTensor<uint32_t>& blLocal,
-                                   LocalTensor<uint32_t>& byteoffsetLocal,
-                                   LocalTensor<uint32_t>& bitsoffsetLocal,
                                    LocalTensor<uint32_t>& tempLocal0,
                                    LocalTensor<uint32_t>& tempLocal1,
                                    LocalTensor<uint32_t>& tempLocal2,
@@ -689,7 +622,7 @@ private:
         Max(tempLocal3, tempLocal2, tempLocal2[2], 2);
         Max(tempLocal4, tempLocal3, tempLocal3[1], 1);
         uint32_t max_bits_length1 = tempLocal4(0);
-        Merge(max_bits_length1, tempLocal1, e_outLocal, mergeLocal0, mergeLocal1, mergeLocal2);
+        Merge(max_bits_length1, tempLocal1, e_outLocal[max_bits_length0 << 4], mergeLocal0, mergeLocal1, mergeLocal2);
 
         // mblSum += max_bits_length0 + max_bit_length1;
         thisTileCompressedSize = (max_bits_length0 + max_bits_length1) << 4;
@@ -700,12 +633,12 @@ private:
             is = true;
         }
         compressedSize += thisTileCompressedSize;
-        mbl_outLocal(tile_idx) = (max_bits_length1 << 4) | max_bits_length0;
+        mblLocal(tile_idx) = (max_bits_length1 << 4) | max_bits_length0;
 
         inQueue.FreeTensor(e_inLocal);
     }
 
-    __aicore__ inline void CopyOut(bool is, uint32_t offset, uint32_t len) {
+    __aicore__ inline void CopyOut(bool is, uint32_t offset) {
         if(is){
             LocalTensor<uint16_t> e_outLocal = e_outQueue.DeQue<uint16_t>();//每次输出32字节，应该为16个uint16_t
             DataCopy(e_output[offset], e_outLocal, TILE_LEN / 2);
@@ -731,7 +664,7 @@ private:
 
     GlobalTensor<T> e_input;
     GlobalTensor<T> table_input;
-    GlobalTensor<uint32_t> bits_length;
+    GlobalTensor<uint32_t> bits_length_input;
     GlobalTensor<uint8_t> mbl_output;
     GlobalTensor<uint8_t> output;
 
@@ -795,7 +728,6 @@ private:
         uint32_t computeLen = min(TILE_LEN, totalElements - offset);
         LocalTensor<T> inLocal = inQueue.DeQue<T>();
         LocalTensor<uint8_t> e_outLocal = e_outQueue.AllocTensor<uint8_t>();
-        LocalTensor<uint8_t> m_s_outLocal = m_s_outQueue.AllocTensor<uint8_t>();
 
         // 处理每个元素
         for (uint32_t i = 0; i < computeLen; ++i) {
@@ -808,31 +740,28 @@ private:
         }
 
         inQueue.FreeTensor(inLocal);
-        e_outQueue.EnQue(e_outLocal);
-        m_s_outQueue.EnQue(m_s_outLocal);
+        outQueue.EnQue(e_outLocal);
     }
 
     __aicore__ inline void CopyOut(uint32_t tileIdx) {
         uint32_t offset = tileIdx * TILE_LEN;
         uint32_t copyLen = min(TILE_LEN, totalElements - offset);
-        LocalTensor<uint8_t> e_outLocal = e_outQueue.DeQue<uint8_t>();
-        LocalTensor<uint8_t> m_s_outLocal = m_s_outQueue.DeQue<uint8_t>();
+        LocalTensor<uint8_t> e_outLocal = outQueue.DeQue<uint8_t>();
 
         // 将结果拷贝回Global Memory
         DataCopy(e_output[offset], e_outLocal, copyLen);
         DataCopy(m_s_output[offset], m_s_outLocal, copyLen);
 
-        e_outQueue.FreeTensor(e_outLocal);
-        m_s_outQueue.FreeTensor(m_s_outLocal);
+        outQueue.FreeTensor(e_outLocal);
     }
 
 private:
     TPipe* pipe;
     TQue<QuePosition::VECIN, BUFFER_NUM> inQueue_;
     TQue<QuePosition::VECOUT, BUFFER_NUM> e_outQueue;
-    TQue<QuePosition::VECOUT, BUFFER_NUM> m_s_outQueue;
+
     GlobalTensor<T> input;
-    GlobalTensor<uint8_t> e_output, m_s_output;
+    GlobalTensor<uint8_t> e_output;
     uint32_t blockElements;
     uint32_t tileNum;
     uint32_t tileLength;
