@@ -6,6 +6,8 @@ cmake_minimum_required(VERSION 3.16.0)
 # project information
 project(Ascend_C)
 set(SOC_VERSION "Ascend910B2" CACHE STRING "system on chip type")
+# add_ops_compile_options(ALL OPTIONS -DASCENDC_DUMP=0)
+
 if(DEFINED ENV{USER} AND "$ENV{USER}" STREQUAL "root")
     set(DEFAULT_ASCEND_CANN_PACKAGE_PATH "/usr/local/Ascend/ascend-toolkit/latest" CACHE PATH "ASCEND CANN package default installation directory for root user")
 else()
@@ -40,20 +42,23 @@ include(${ASCENDC_CMAKE_DIR}/ascendc.cmake)
 # set(Torch_npu "/root/yjw/pytorch/libtorch_npu/")
 # set(Torch_DIR "/root/yjw/libtorch/share/cmake/Torch")  # 关键路径
 # find_package(Torch REQUIRED)
-set(torch_npu_path "/root/yjw/pytorch/libtorch_npu/")         # 设置libtorch_npu的路径
-include_directories(${torch_npu_path}/include)   # 设置引用libtorch_npu的头文件路径
-link_directories(${torch_npu_path}/lib)          # 设置引用libtorch_npu的库文件路径
+# set(torch_npu_path "/root/yjw/pytorch/libtorch_npu/")         # 设置libtorch_npu的路径
+# include_directories(${torch_npu_path}/include)   # 设置引用libtorch_npu的头文件路径
+# link_directories(${torch_npu_path}/lib)          # 设置引用libtorch_npu的库文件路径
+
 
 # ascendc_library use to add kernel file to generate ascendc library
 ascendc_library(hans_compress STATIC
+    hans_table.cpp
     hans_compress.cpp
+    hans_merge.cpp
 )
-ascendc_library(hans_decompress STATIC
-    hans_decompress.cpp
-)
+# ascendc_library(hans_decompress STATIC
+#     hans_decompress.cpp
+# )
 
 add_executable(compress compress.cpp)
-add_executable(decompress decompress.cpp)
+# add_executable(decompress decompress.cpp)
 
 target_link_libraries(compress PRIVATE
     hans_compress
@@ -61,6 +66,6 @@ target_link_libraries(compress PRIVATE
     # torch_npu
     # "${TORCH_NPU_LIBRARIES}"
 )
-target_link_libraries(decompress PRAVITE
-    hans_decompress
-)
+# target_link_libraries(decompress PRAVITE
+#     hans_decompress
+# )
