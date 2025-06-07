@@ -1,0 +1,8 @@
+/root/yjw/HANS/HANS-NPU/build/hans_compress_preprocess-prefix/src/hans_compress_preprocess-build/CMakeFiles/preprocess_obj.dir
+/root/yjw/HANS/HANS-NPU/build/hans_compress_preprocess-prefix/src/hans_compress_preprocess-build/CMakeFiles/aiv_obj.dir
+/root/yjw/HANS/HANS-NPU/build/hans_compress_preprocess-prefix/src/hans_compress_preprocess-build/CMakeFiles/merge_aiv_obj_text.dir
+/root/yjw/HANS/HANS-NPU/build/hans_compress_preprocess-prefix/src/hans_compress_preprocess-build/CMakeFiles/aic_obj.dir
+/root/yjw/HANS/HANS-NPU/build/hans_compress_preprocess-prefix/src/hans_compress_preprocess-build/CMakeFiles/merge_aic_obj_text.dir
+/root/yjw/HANS/HANS-NPU/build/hans_compress_preprocess-prefix/src/hans_compress_preprocess-build/CMakeFiles/_host_cpp.dir
+/root/yjw/HANS/HANS-NPU/build/hans_compress_preprocess-prefix/src/hans_compress_preprocess-build/CMakeFiles/edit_cache.dir
+/root/yjw/HANS/HANS-NPU/build/hans_compress_preprocess-prefix/src/hans_compress_preprocess-build/CMakeFiles/rebuild_cache.dir

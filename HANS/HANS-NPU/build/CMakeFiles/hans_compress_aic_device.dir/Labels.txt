@@ -1,0 +1,13 @@
+# Target labels
+ hans_compress_aic_device
+# Source files and their labels
+/root/yjw/HANS/HANS-NPU/build/CMakeFiles/hans_compress_aic_device
+/root/yjw/HANS/HANS-NPU/build/CMakeFiles/hans_compress_aic_device.rule
+/root/yjw/HANS/HANS-NPU/build/CMakeFiles/hans_compress_aic_device-complete.rule
+/root/yjw/HANS/HANS-NPU/build/hans_compress_aic_device-prefix/src/hans_compress_aic_device-stamp/hans_compress_aic_device-build.rule
+/root/yjw/HANS/HANS-NPU/build/hans_compress_aic_device-prefix/src/hans_compress_aic_device-stamp/hans_compress_aic_device-configure.rule
+/root/yjw/HANS/HANS-NPU/build/hans_compress_aic_device-prefix/src/hans_compress_aic_device-stamp/hans_compress_aic_device-download.rule
+/root/yjw/HANS/HANS-NPU/build/hans_compress_aic_device-prefix/src/hans_compress_aic_device-stamp/hans_compress_aic_device-install.rule
+/root/yjw/HANS/HANS-NPU/build/hans_compress_aic_device-prefix/src/hans_compress_aic_device-stamp/hans_compress_aic_device-mkdir.rule
+/root/yjw/HANS/HANS-NPU/build/hans_compress_aic_device-prefix/src/hans_compress_aic_device-stamp/hans_compress_aic_device-patch.rule
+/root/yjw/HANS/HANS-NPU/build/hans_compress_aic_device-prefix/src/hans_compress_aic_device-stamp/hans_compress_aic_device-update.rule

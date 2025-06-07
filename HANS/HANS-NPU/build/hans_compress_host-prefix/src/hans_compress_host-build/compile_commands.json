@@ -1,0 +1,17 @@
+[
+{
+  "directory": "/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-build",
+  "command": "/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/ascendc_compiler/ascendc_compiler -DTILING_KEY_VAR=0 -DONE_CORE_DUMP_SIZE=1024 -I/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/tikcfw -I/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/tikcfw/interface -I/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/tikcfw/impl -g -include /root/yjw/HANS/HANS-NPU/build/include/hans_compress/aclrtlaunch_triple_chevrons_func.h -O3 -std=c++17 -include /usr/local/Ascend/ascend-toolkit/latest/tools/../include/version/cann_version.h -fPIC --cce-host-only -fcce-kernel-launch-custom -o CMakeFiles/host_bisheng_obj.dir/root/yjw/HANS/HANS-NPU/hans_table.cpp.o -c /root/yjw/HANS/HANS-NPU/hans_table.cpp",
+  "file": "/root/yjw/HANS/HANS-NPU/hans_table.cpp"
+},
+{
+  "directory": "/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-build",
+  "command": "/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/ascendc_compiler/ascendc_compiler -DTILING_KEY_VAR=0 -DONE_CORE_DUMP_SIZE=1048576 -I/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/tikcfw -I/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/tikcfw/interface -I/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/tikcfw/impl -g -include /root/yjw/HANS/HANS-NPU/build/include/hans_compress/aclrtlaunch_triple_chevrons_func.h -O3 -std=c++17 -include /usr/local/Ascend/ascend-toolkit/latest/tools/../include/version/cann_version.h -fPIC --cce-host-only -fcce-kernel-launch-custom -o CMakeFiles/host_bisheng_obj.dir/root/yjw/HANS/HANS-NPU/hans_compress.cpp.o -c /root/yjw/HANS/HANS-NPU/hans_compress.cpp",
+  "file": "/root/yjw/HANS/HANS-NPU/hans_compress.cpp"
+},
+{
+  "directory": "/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-build",
+  "command": "/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/ascendc_compiler/ascendc_compiler -DTILING_KEY_VAR=0 -DONE_CORE_DUMP_SIZE=1048576 -I/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/tikcfw -I/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/tikcfw/interface -I/usr/local/Ascend/ascend-toolkit/latest/tools/tikcpp/tikcfw/impl -g -include /root/yjw/HANS/HANS-NPU/build/include/hans_compress/aclrtlaunch_triple_chevrons_func.h -O3 -std=c++17 -include /usr/local/Ascend/ascend-toolkit/latest/tools/../include/version/cann_version.h -fPIC --cce-host-only -fcce-kernel-launch-custom -o CMakeFiles/host_bisheng_obj.dir/root/yjw/HANS/HANS-NPU/hans_merge.cpp.o -c /root/yjw/HANS/HANS-NPU/hans_merge.cpp",
+  "file": "/root/yjw/HANS/HANS-NPU/hans_merge.cpp"
+}
+]

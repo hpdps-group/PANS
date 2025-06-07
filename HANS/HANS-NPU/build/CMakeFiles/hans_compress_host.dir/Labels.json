@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/root/yjw/HANS/HANS-NPU/build/CMakeFiles/hans_compress_host"
+		},
+		{
+			"file" : "/root/yjw/HANS/HANS-NPU/build/CMakeFiles/hans_compress_host.rule"
+		},
+		{
+			"file" : "/root/yjw/HANS/HANS-NPU/build/CMakeFiles/hans_compress_host-complete.rule"
+		},
+		{
+			"file" : "/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-stamp/hans_compress_host-build.rule"
+		},
+		{
+			"file" : "/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-stamp/hans_compress_host-configure.rule"
+		},
+		{
+			"file" : "/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-stamp/hans_compress_host-download.rule"
+		},
+		{
+			"file" : "/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-stamp/hans_compress_host-install.rule"
+		},
+		{
+			"file" : "/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-stamp/hans_compress_host-mkdir.rule"
+		},
+		{
+			"file" : "/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-stamp/hans_compress_host-patch.rule"
+		},
+		{
+			"file" : "/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-stamp/hans_compress_host-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"hans_compress_host"
+		],
+		"name" : "hans_compress_host"
+	}
+}
