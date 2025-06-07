@@ -1,1 +1,0 @@
-/usr/bin/c++ -g CMakeFiles/compress.dir/compress.cpp.o -o compress   -L/usr/local/Ascend/ascend-toolkit/latest/lib64  -L/usr/local/Ascend/ascend-toolkit/latest/tools/simulator/Ascend910B2/lib  lib/libhans_compress.a -lascendcl -lruntime -lregister -lerror_manager -lprofapi -lge_common_base -lascendalog -lmmpa -ldl -lascend_dump -lc_sec 

@@ -1,2 +1,0 @@
-/usr/bin/ar qc libhans_compress_interface.a CMakeFiles/hans_compress_interface.dir/hans_compress_stub.cpp.o
-/usr/bin/ranlib libhans_compress_interface.a

@@ -1,2 +1,0 @@
-/usr/bin/ar qc lib/libhans_compress.a CMakeFiles/hans_compress_host_stub_obj.dir/auto_gen/hans_compress/host_stub.cpp.o elf_tool.c.o ascendc_runtime.cpp.o
-/usr/bin/ranlib lib/libhans_compress.a

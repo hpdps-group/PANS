@@ -1,7 +1,0 @@
-/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-build/CMakeFiles/host_bisheng_obj.dir
-/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-build/CMakeFiles/edit_cache.dir
-/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-build/CMakeFiles/rebuild_cache.dir
-/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-build/CMakeFiles/list_install_components.dir
-/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-build/CMakeFiles/install.dir
-/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-build/CMakeFiles/install/local.dir
-/root/yjw/HANS/HANS-NPU/build/hans_compress_host-prefix/src/hans_compress_host-build/CMakeFiles/install/strip.dir

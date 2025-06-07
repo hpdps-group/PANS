@@ -1,4 +1,0 @@
-/root/yjw/HANS/HANS-NPU/build/hans_compress_aiv_device-prefix/src/hans_compress_aiv_device-build/CMakeFiles/device_aiv_obj.dir
-/root/yjw/HANS/HANS-NPU/build/hans_compress_aiv_device-prefix/src/hans_compress_aiv_device-build/CMakeFiles/merge_aiv_device_obj.dir
-/root/yjw/HANS/HANS-NPU/build/hans_compress_aiv_device-prefix/src/hans_compress_aiv_device-build/CMakeFiles/edit_cache.dir
-/root/yjw/HANS/HANS-NPU/build/hans_compress_aiv_device-prefix/src/hans_compress_aiv_device-build/CMakeFiles/rebuild_cache.dir
