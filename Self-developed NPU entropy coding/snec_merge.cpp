@@ -1,16 +1,16 @@
-// #include "hans_utils.h"
-#include "kernel_operator.h"
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2022-2023. All rights reserved.
+ * This file constains code of cpu debug and npu code.We read data from bin file
+ * and write result to file.
+ */
 
-// using namespace AscendC;
-
-// //注意：所有算子的输入与输出尽可能32字节对齐，Add这些底层接口的输入与输出必须32字节对齐
+#include "snec_utils.h"
+#include "snec_device.h"
 
 // template<typename T>
 // class calcprefix_coalesceKernel {
 // public:
-//     __aicore__ inline calcprefix_coalesceKernel() {} // 生成数据头，紧缩码字，计算压缩率
-//     // 
-//     // 输出：一整块连续的压缩块，压缩块的大小
+//     __aicore__ inline calcprefix_coalesceKernel() {}
 
 //     __aicore__ inline void Init(TPipe* pipe,
 //                                 uint32_t dataBlockNum,
@@ -46,7 +46,7 @@
 //             compSizePrefixLocal(i) = compSizePrefixLocal(i - 1) + compSizeLocal(i - 1);
 //         }
 
-//         uint32_t compSize = compSizeLocal(blockId);// 字节为单位
+//         uint32_t compSize = compSizeLocal(blockId);
 //         auto bindLocal = queBind.AllocTensor<uint8_t>();
 //         DataCopy(bindLocal, retrenchInput[blockId * (datablockNumPerBlock * DATA_BLOCK_BYTE_NUM / 2)], compSize);
 //         DataCopy(retrenchOutput[compSizePrefixLocal(blockId)], bindLocal, compSize);
@@ -61,13 +61,13 @@
 //     TBuf<TPosition::VECCALC> compSize;
 //     TBuf<TPosition::VECCALC> compSizePrefix;
 
-//     GlobalTensor<T> finalexp;// 最终压缩块的GM地址
+//     GlobalTensor<T> finalexp;
 //     GlobalTensor<T> blockCompSize;
 
 //     uint32_t blockId;
 //     uint32_t blockNum;
 //     uint32_t dataBlockNum;
-//     uint32_t bufferSize; // 每个线程block处理的datablock数量
+//     uint32_t bufferSize;
 // };
 
 // __global__ __aicore__ void calcprefix_coalesce(uint32_t datablockNum,
@@ -83,5 +83,5 @@
 // }
 
 // extern "C" void merge(Header *cphd, void *stream, uint8_t* srcDevice, uint8_t *compressedDevice, uint8_t* blockCompSizeDevice, uint32_t bufferSize){
-//     calcprefix_coalesce<<<BLOCK_NUM, nullptr, stream>>>(cphd.dataBlockNum, blockCompSizeDevice, getCompressed_exp(cphd, compressedDevice, uint32_t bufferSize));//计算前缀和，用于后续块合并，字节为单位，
+//     calcprefix_coalesce<<<BLOCK_NUM, nullptr, stream>>>(cphd.dataBlockNum, blockCompSizeDevice, getCompressed_exp(cphd, compressedDevice, uint32_t bufferSize));
 // }

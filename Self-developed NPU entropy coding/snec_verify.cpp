@@ -1,15 +1,16 @@
-#include "hans_utils.h"
-#include "kernel_operator.h"
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2022-2023. All rights reserved.
+ * This file constains code of cpu debug and npu code.We read data from bin file
+ * and write result to file.
+ */
 
-using namespace AscendC;
-
-//注意：所有算子的输入与输出尽可能32字节对齐，Add这些底层接口的输入与输出必须32字节对齐
+#include "snec_utils.h"
+#include "snec_device.h"
 
 template<typename T>
 class Verify {
 public:
     __aicore__ inline Verify() {}
-    // 验证结果正确性
 
     __aicore__ inline void Init(
                                 TPipe* pipe,
@@ -106,7 +107,7 @@ private:
 
     TBuf<TPosition::VECCALC> temp;
 
-    GlobalTensor<T> decompressedGm;// 最终压缩块的GM地址
+    GlobalTensor<T> decompressedGm;
     GlobalTensor<T> srcGm;
     GlobalTensor<T> outGm;
 
@@ -114,7 +115,7 @@ private:
     uint32_t blockNum;
     uint32_t dataBlockNum;
     uint32_t dataBlockSize;
-    uint32_t totalUndecompressedBytes; // 每个线程block处理的datablock数量
+    uint32_t totalUndecompressedBytes;
 };
 
 __global__ __aicore__ void res_verify(  uint32_t datablockNum,

@@ -3,6 +3,7 @@
 # CMake lowest version requirement
 cmake_minimum_required(VERSION 3.16.0)
 
+# project information
 project(Ascend_C)
 set(SOC_VERSION "Ascend910B2" CACHE STRING "system on chip type")
 
@@ -35,23 +36,23 @@ endif()
 
 include(${ASCENDC_CMAKE_DIR}/ascendc.cmake)
 
-ascendc_library(hans_compress STATIC
-    hans_table.cpp
-    hans_compress.cpp
-    hans_merge.cpp
+ascendc_library(snec_compress STATIC
+    snec_table.cpp
+    snec_compress.cpp
+    snec_merge.cpp
 )
-ascendc_library(hans_decompress STATIC
-    hans_decompress.cpp
-    hans_verify.cpp
+ascendc_library(snec_decompress STATIC
+    snec_decompress.cpp
+    snec_verify.cpp
 )
 
 add_executable(compress compress.cpp)
 add_executable(decompress decompress.cpp)
 
 target_link_libraries(compress PRIVATE
-    hans_compress
+    snec_compress
 )
 
 target_link_libraries(decompress PRIVATE
-    hans_decompress
+    snec_decompress
 )

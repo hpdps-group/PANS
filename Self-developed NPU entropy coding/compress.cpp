@@ -4,24 +4,14 @@
  * and write result to file.
  */
 
-#include "hans_utils.h"
-#include "acl/acl.h"
-#include "acl/acl_op_compiler.h"
+#include "snec_utils.h"
+#include "snec_host.h"
 
-using namespace std;
-
-#define CHECK_ACL(x)                                                                        \
-    do {                                                                                    \
-        aclError __ret = x;                                                                 \
-        if (__ret != ACL_ERROR_NONE) {                                                      \
-            std::cerr << __FILE__ << ":" << __LINE__ << " aclError:" << __ret << std::endl; \
-        }                                                                                   \
-    } while (0);
-
-extern "C" void table(uint32_t totalUncompressedSize, void* stream, uint8_t* srcDevice, uint8_t* histogramDevice, uint32_t dataType);
+extern "C" void table(uint32_t totalUncompressedSize, void *stream, uint8_t *srcDevice, uint8_t *histogramDevice, uint32_t dataType);
 extern "C" void compress(Header *cphd, void *stream, uint8_t *srcDevice, uint8_t *compressedDevice, uint8_t *histogramDevice, uint8_t *blockCompSizeDevice);
 // extern "C" void merge(Header *cphd, void *stream, uint8_t* srcDevice, uint8_t *compressedDevice, uint8_t* blockCompSizeDevice, uint32_t bufferSize);
-int main(int32_t argc, char* argv[])
+
+int main(int32_t argc, char *argv[])
 {
     std::string inputFile;
     std::string outputFile;
@@ -31,8 +21,9 @@ int main(int32_t argc, char* argv[])
     int compLevel = 0;
     bool isStatistics = false;
 
-    if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] 
+    if (argc < 4)
+    {
+        std::cerr << "Usage: " << argv[0]
                   << " <input.file> <output.file> <inputByteSize>"
                   << " [tileLength=16] [dataTypes=0] [compLevel=0] [isStatistics=1]\n";
         std::cerr << "\nPositional arguments:\n"
@@ -49,16 +40,20 @@ int main(int32_t argc, char* argv[])
     inputFile = argv[1];
     outputFile = argv[2];
     inputByteSize = std::stoul(argv[3]);
-    
-    // 可选参数
-    if (argc > 4) tileLength = std::stoi(argv[4]);
-    if (argc > 5) dataType = std::stoi(argv[5]);
-    if (argc > 6) compLevel = std::stoi(argv[6]);
-    if (argc > 7) isStatistics = std::stoi(argv[7]) != 0;
+
+    if (argc > 4)
+        tileLength = std::stoi(argv[4]);
+    if (argc > 5)
+        dataType = std::stoi(argv[5]);
+    if (argc > 6)
+        compLevel = std::stoi(argv[6]);
+    if (argc > 7)
+        isStatistics = std::stoi(argv[7]) != 0;
 
     ifstream file(inputFile, ios::binary);
-    if (!file) {
-        cerr << "无法打开文件: " << inputFile << endl;
+    if (!file)
+    {
+        cerr << "Unable to open the file: " << inputFile << endl;
         return EXIT_FAILURE;
     }
     streamsize fileSize = file.tellg();
@@ -71,16 +66,16 @@ int main(int32_t argc, char* argv[])
     aclrtStream stream = nullptr;
     CHECK_ACL(aclrtCreateStream(&stream));
 
-    uint16_t* host = (uint16_t*)malloc(inputByteSize);
-    file.read(reinterpret_cast<char*>(host), inputByteSize);//全部按照uint8_t读入
+    uint16_t *host = (uint16_t *)malloc(inputByteSize);
+    file.read(reinterpret_cast<char *>(host), inputByteSize);
     file.close();
 
     uint32_t tileNum = (DATA_BLOCK_BYTE_NUM_C / sizeof(uint16_t)) / tileLength;
 
     uint8_t *compressedHost;
-    CHECK_ACL(aclrtMallocHost((void**)(&compressedHost), getFinalbufferSize(inputByteSize, tileNum)));
+    CHECK_ACL(aclrtMallocHost((void **)(&compressedHost), getFinalbufferSize(inputByteSize, tileNum)));
 
-    Header* cphd = (Header*) compressedHost;
+    Header *cphd = (Header *)compressedHost;
     cphd->dataBlockSize = 8 * 2048;
     cphd->dataBlockNum = (inputByteSize + DATA_BLOCK_BYTE_NUM_C - 1) / DATA_BLOCK_BYTE_NUM_C;
     cphd->threadBlockNum = BLOCK_NUM;
@@ -94,35 +89,36 @@ int main(int32_t argc, char* argv[])
     cphd->HistogramBytes = HISTOGRAM_BINS;
 
     uint8_t *srcDevice, *compressedDevice, *histogramDevice, *blockCompSizeDevice;
-    CHECK_ACL(aclrtMalloc((void**)&srcDevice, inputByteSize, ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACL(aclrtMalloc((void**)&compressedDevice, getFinalbufferSize(inputByteSize, tileNum), ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACL(aclrtMalloc((void**)&histogramDevice, BLOCK_NUM * HISTOGRAM_BINS * sizeof(int), ACL_MEM_MALLOC_HUGE_FIRST));
-    CHECK_ACL(aclrtMalloc((void**)&blockCompSizeDevice, BLOCK_NUM * 32 * sizeof(uint8_t), ACL_MEM_MALLOC_HUGE_FIRST)); 
+    CHECK_ACL(aclrtMalloc((void **)&srcDevice, inputByteSize, ACL_MEM_MALLOC_HUGE_FIRST));
+    CHECK_ACL(aclrtMalloc((void **)&compressedDevice, getFinalbufferSize(inputByteSize, tileNum), ACL_MEM_MALLOC_HUGE_FIRST));
+    CHECK_ACL(aclrtMalloc((void **)&histogramDevice, BLOCK_NUM * HISTOGRAM_BINS * sizeof(int), ACL_MEM_MALLOC_HUGE_FIRST));
+    CHECK_ACL(aclrtMalloc((void **)&blockCompSizeDevice, BLOCK_NUM * 32 * sizeof(uint8_t), ACL_MEM_MALLOC_HUGE_FIRST));
 
     CHECK_ACL(aclrtMemcpy(srcDevice, inputByteSize, host, inputByteSize, ACL_MEMCPY_HOST_TO_DEVICE));
 
     auto start = std::chrono::high_resolution_clock::now();
     table(inputByteSize, stream, srcDevice, histogramDevice, dataType);
     CHECK_ACL(aclrtSynchronizeStream(stream));
-    auto end = std::chrono::high_resolution_clock::now();  
+    auto end = std::chrono::high_resolution_clock::now();
     double table_time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
-    std::cout << "table   time " << std::fixed << std::setprecision(3) << table_time << std::endl;
+    std::cout << "table   time: " << std::fixed << std::setprecision(3) << table_time << " ms" << std::endl;
 
     double comp_time = 0.0;
     double time = 0.0;
-    for(int i = 0; i < 11; i ++){
-        auto start = std::chrono::high_resolution_clock::now();  
+    for (int i = 0; i < 11; i++)
+    {
+        auto start = std::chrono::high_resolution_clock::now();
         compress(cphd, stream, srcDevice, compressedDevice, histogramDevice, blockCompSizeDevice);
         CHECK_ACL(aclrtSynchronizeStream(stream));
-        auto end = std::chrono::high_resolution_clock::now();  
-        if(i > 5)
-            comp_time += //time;
-            std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;  
+        auto end = std::chrono::high_resolution_clock::now();
+        if (i > 5)
+            comp_time +=
+                std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1e3;
     }
     comp_time /= 5;
-    double c_bw = ( 1.0 * inputByteSize / 1024 / 1024 ) / ( (comp_time) * 1e-3 );  
-    std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time << " ms B/W "   
-                  << std::fixed << std::setprecision(1) << c_bw << " MB/s " << std::endl;
+    double c_bw = (1.0 * inputByteSize / 1024 / 1024) / ((comp_time) * 1e-3);
+    std::cout << "comp   time " << std::fixed << std::setprecision(3) << comp_time << " ms B/W "
+              << std::fixed << std::setprecision(1) << c_bw << " MB/s " << std::endl;
 
     int datablockNum = (inputByteSize + DATA_BLOCK_BYTE_NUM_C - 1) / DATA_BLOCK_BYTE_NUM_C;
     int datablockNumPerBLOCK = (datablockNum + BLOCK_NUM - 1) / BLOCK_NUM;
@@ -133,72 +129,74 @@ int main(int32_t argc, char* argv[])
 
     uint8_t *histogramHost;
 
-    CHECK_ACL(aclrtMallocHost((void**)(&histogramHost), BLOCK_NUM * HISTOGRAM_BINS * sizeof(int)));
+    CHECK_ACL(aclrtMallocHost((void **)(&histogramHost), BLOCK_NUM * HISTOGRAM_BINS * sizeof(int)));
     CHECK_ACL(aclrtMemcpy(histogramHost, BLOCK_NUM * HISTOGRAM_BINS * sizeof(int), histogramDevice, BLOCK_NUM * HISTOGRAM_BINS * sizeof(int), ACL_MEMCPY_DEVICE_TO_HOST));
 
-    uint8_t* table8 = getTable(cphd, compressedHost);   
-    uint32_t* hist32 = (uint32_t*)histogramHost;
+    uint8_t *table8 = getTable(cphd, compressedHost);
+    uint32_t *hist32 = (uint32_t *)histogramHost;
 
-    for(int i = 0; i < HISTOGRAM_BINS; i ++){
+    for (int i = 0; i < HISTOGRAM_BINS; i++)
+    {
         table8[hist32[i] >> 14] = (uint8_t)i;
     }
 
     uint8_t *blockCompSizeHost;
-    CHECK_ACL(aclrtMallocHost((void**)(&blockCompSizeHost), BLOCK_NUM * 8 * sizeof(int)));
+    CHECK_ACL(aclrtMallocHost((void **)(&blockCompSizeHost), BLOCK_NUM * 8 * sizeof(int)));
     CHECK_ACL(aclrtMemcpy(blockCompSizeHost, BLOCK_NUM * 8 * sizeof(int), blockCompSizeDevice, BLOCK_NUM * 8 * sizeof(int), ACL_MEMCPY_DEVICE_TO_HOST));
 
     uint32_t totalCompSize = 0;
-    uint32_t* compsizePrefix = (uint32_t*)(getCompSizePrefix(cphd, compressedHost));
+    uint32_t *compsizePrefix = (uint32_t *)(getCompSizePrefix(cphd, compressedHost));
     compsizePrefix[0] = 0;
-    uint32_t* blockCompSizeHost32 = (uint32_t*)blockCompSizeHost;
+    uint32_t *blockCompSizeHost32 = (uint32_t *)blockCompSizeHost;
     totalCompSize = totalCompSize + blockCompSizeHost32[0];
-    for(int i = 1; i < BLOCK_NUM; i ++){
+    for (int i = 1; i < BLOCK_NUM; i++)
+    {
         compsizePrefix[i] = compsizePrefix[i - 1] + blockCompSizeHost32[(i - 1) * 8];
         totalCompSize += blockCompSizeHost32[i * 8];
     }
 
-    uint8_t* compexpHostStart = getCompressed_exp(cphd, compressedHost);
-    uint8_t* compexpDeviceStart = getCompressed_exp(cphd, compressedDevice);
-    
-    for(int i = 0; i < BLOCK_NUM; i ++){
-        uint8_t* comphstart = compexpHostStart + compsizePrefix[i];
-        uint8_t* compdstart = compexpDeviceStart + ((i + 1) * bufferSize - blockCompSizeHost32[i * 8]);
+    uint8_t *compexpHostStart = getCompressed_exp(cphd, compressedHost);
+    uint8_t *compexpDeviceStart = getCompressed_exp(cphd, compressedDevice);
+
+    for (int i = 0; i < BLOCK_NUM; i++)
+    {
+        uint8_t *comphstart = compexpHostStart + compsizePrefix[i];
+        uint8_t *compdstart = compexpDeviceStart + ((i + 1) * bufferSize - blockCompSizeHost32[i * 8]);
         CHECK_ACL(aclrtMemcpy(comphstart, blockCompSizeHost32[i * 8], compdstart, blockCompSizeHost32[i * 8], ACL_MEMCPY_DEVICE_TO_HOST));
     }
 
-    auto mbl32 = (uint32_t*)(compressedHost + 32 + HISTOGRAM_BINS
-    + DATA_BLOCK_BYTE_NUM_C / 2 * datablockNum 
-    + 1024 * 256
-    );
+    auto mbl32 = (uint32_t *)(compressedHost + 32 + HISTOGRAM_BINS + DATA_BLOCK_BYTE_NUM_C / 2 * datablockNum + 1024 * 256);
 
     uint32_t totalCompressedSize = 0;
-    if(cphd->dataType == 0 | cphd->dataType == 1){
-        totalCompressedSize =   32 + 
-                                HISTOGRAM_BINS + 
-                                inputByteSize / 2 +
-                                cphd->dataBlockNum * (cphd->dataBlockSize / (cphd->tileLength * sizeof(uint16_t))) +
-                                BLOCK_NUM * 32 +
-                                totalCompSize;
+    if (cphd->dataType == 0 | cphd->dataType == 1)
+    {
+        totalCompressedSize = 32 +
+                              HISTOGRAM_BINS +
+                              inputByteSize / 2 +
+                              cphd->dataBlockNum * (cphd->dataBlockSize / (cphd->tileLength * sizeof(uint16_t))) +
+                              BLOCK_NUM * 32 +
+                              totalCompSize;
     }
-    else{
-        totalCompressedSize =   32 + 
-                                HISTOGRAM_BINS + 
-                                inputByteSize / 2 +
-                                cphd->dataBlockNum * (cphd->dataBlockSize / (cphd->tileLength * sizeof(float))) +
-                                BLOCK_NUM * 32 +
-                                totalCompSize;
+    else
+    {
+        totalCompressedSize = 32 +
+                              HISTOGRAM_BINS +
+                              inputByteSize / 2 +
+                              cphd->dataBlockNum * (cphd->dataBlockSize / (cphd->tileLength * sizeof(float))) +
+                              BLOCK_NUM * 32 +
+                              totalCompSize;
     }
     cphd->totalCompressedBytes = totalCompressedSize;
 
-    printf("压缩前大小：%d\n", inputByteSize);
-    printf("压缩后大小：%d\n", totalCompressedSize);
+    printf("Size before compression：%d\n", inputByteSize);
+    printf("Compressed size：%d\n", totalCompressedSize);
     printf("cr: %f\n", computeCr(inputByteSize, totalCompressedSize));
 
     std::ofstream ofile;
     ofile.open(outputFile, std::ios::binary);
 
     std::filebuf *obuf = ofile.rdbuf();
-    ofile.write(reinterpret_cast<char*>(compressedHost), totalCompressedSize);
+    ofile.write(reinterpret_cast<char *>(compressedHost), totalCompressedSize);
     ofile.close();
 
     CHECK_ACL(aclrtFree(srcDevice));
