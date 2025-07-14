@@ -173,7 +173,7 @@ int main(int32_t argc, char *argv[])
         totalCompressedSize = 32 +
                               HISTOGRAM_BINS +
                               inputByteSize / 2 +
-                              cphd->dataBlockNum * (cphd->dataBlockSize / (cphd->tileLength * sizeof(uint16_t))) +
+                              cphd->dataBlockNum * (cphd->dataBlockSize / (cphd->tileLength * sizeof(uint16_t))) / 2+
                               BLOCK_NUM * 32 +
                               totalCompSize;
     }
@@ -182,7 +182,7 @@ int main(int32_t argc, char *argv[])
         totalCompressedSize = 32 +
                               HISTOGRAM_BINS +
                               inputByteSize / 2 +
-                              cphd->dataBlockNum * (cphd->dataBlockSize / (cphd->tileLength * sizeof(float))) +
+                              cphd->dataBlockNum * (cphd->dataBlockSize / (cphd->tileLength * sizeof(float))) / 2+
                               BLOCK_NUM * 32 +
                               totalCompSize;
     }
