@@ -174,7 +174,7 @@ int main(int32_t argc, char *argv[])
                               HISTOGRAM_BINS +
                               inputByteSize / 2 +
                               cphd->dataBlockNum * (cphd->dataBlockSize / (cphd->tileLength * sizeof(uint16_t))) / 2+
-                              BLOCK_NUM * 32 +
+                              BLOCK_NUM * 4 +
                               totalCompSize;
     }
     else
@@ -183,7 +183,7 @@ int main(int32_t argc, char *argv[])
                               HISTOGRAM_BINS +
                               inputByteSize / 2 +
                               cphd->dataBlockNum * (cphd->dataBlockSize / (cphd->tileLength * sizeof(float))) / 2+
-                              BLOCK_NUM * 32 +
+                              BLOCK_NUM * 4 +
                               totalCompSize;
     }
     cphd->totalCompressedBytes = totalCompressedSize;
