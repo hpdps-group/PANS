@@ -47,7 +47,18 @@ ascendc_library(snec_decompress STATIC
 )
 
 add_executable(compress compress.cpp)
+
+target_compile_options(compress PRIVATE
+    $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},npu>:-g>>
+    -O2 -std=c++17 -D_GLIBCXX_USE_CXX11_ABI=0
+)
+
 add_executable(decompress decompress.cpp)
+
+target_compile_options(decompress PRIVATE
+    $<BUILD_INTERFACE:$<$<STREQUAL:${RUN_MODE},npu>:-g>>
+    -O2 -std=c++17 -D_GLIBCXX_USE_CXX11_ABI=0
+)
 
 target_link_libraries(compress PRIVATE
     snec_compress
