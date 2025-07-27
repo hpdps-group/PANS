@@ -4,7 +4,7 @@
 - Developer: Jinwu Yang 
 - Advisor: Dingwen Tao, Guangming Tan
 
-pt_to_dat.py: 一个.pt文件转.dat文件的python程序
+pt_to_dat.py: 一个.pt文件转.dat文件的python程序，小端处理
 
 NPU 自研熵编码器
 
