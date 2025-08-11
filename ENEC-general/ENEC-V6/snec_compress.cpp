@@ -357,14 +357,14 @@ public:
         pipe->InitBuffer(inQueue, BUFFER_NUM, computeNum * sizeof(T));
         pipe->InitBuffer(e_outQueue, BUFFER_NUM, computeNum * sizeof(T));
         pipe->InitBuffer(ms_outQueue, BUFFER_NUM, computeNum);
-        pipe->InitBuffer(mbl_outQueue, BUFFER_NUM, tileNum);
+        pipe->InitBuffer(mbl_outQueue, BUFFER_NUM, tileNum * sizeof(T));
     }
 
     __aicore__ inline void Process()
     {
-        pipe->InitBuffer(temp0, computeNum * sizeof(T));
-        pipe->InitBuffer(table, HISTOGRAM_BINS * sizeof(T));
-        pipe->InitBuffer(merge, computeNum * sizeof(T));
+        pipe->InitBuffer(temp0, computeNum * sizeof(T));// 32kb
+        pipe->InitBuffer(table, HISTOGRAM_BINS * sizeof(T));// 256 * 4 = 1kb
+        pipe->InitBuffer(merge, computeNum * sizeof(T));// 32kb
         pipe->InitBuffer(cmbl, tileNum * sizeof(T));
         pipe->InitBuffer(mask15, tileNum * sizeof(T));
         pipe->InitBuffer(cmp, computeNum / 8);
@@ -461,6 +461,11 @@ private:
 
         AIV_WITH_BARRIER(ShiftLeft, e_inLocal, e_inLocal, (uint32_t)2, computeNum);
         AIV_WITH_BARRIER(Gather, e_inLocal, tableLocal, e_inLocal, (uint32_t)0, (uint32_t)computeNum);
+        // AIV_WITH_BARRIER(Cast,e_inLocal.template ReinterpretCast<float>(), e_inLocal.template ReinterpretCast<int32_t>(),RoundMode::CAST_NONE, computeNum);
+        // AIV_WITH_BARRIER(Duplicate<float>,e_outLocal.template ReinterpretCast<float>(), (float)125.0, computeNum);
+        // AIV_WITH_BARRIER(Axpy,e_outLocal.template ReinterpretCast<float>(), e_inLocal.template ReinterpretCast<float>(), (float)-1.0, computeNum);
+        // AIV_WITH_BARRIER(DataCopy,e_inLocal, e_outLocal, computeNum);
+        // AIV_WITH_BARRIER(Cast,e_inLocal.template ReinterpretCast<int32_t>(), e_inLocal.template ReinterpretCast<float>(),RoundMode::CAST_NONE, computeNum);
         // DumpTensor(e_inLocal, 1, 256);
 
         AIV_WITH_BARRIER(Or, tempLocal0, e_inLocal, e_inLocal[computeNum / 2], computeNum / 2 * 2);
@@ -474,17 +479,17 @@ private:
         // DumpTensor(tempLocal0, 1, 256);
         AIV_WITH_BARRIER(Adds, tempLocal0.template ReinterpretCast<int32_t>(), tempLocal0.template ReinterpretCast<int32_t>(), (int32_t)(1), tileNum);
         // DumpTensor(tempLocal0, 1, 256);
-        AIV_WITH_BARRIER(Cast, tempLocal0.template ReinterpretCast<float>(), tempLocal0.template ReinterpretCast<int32_t>(), RoundMode::CAST_TRUNC, tileNum);
-        AIV_WITH_BARRIER(ShiftRight, tempLocal0, tempLocal0, (uint32_t)23, tileNum);
-        AIV_WITH_BARRIER(Adds, tempLocal0.template ReinterpretCast<int32_t>(), tempLocal0.template ReinterpretCast<int32_t>(), (int32_t)(-127), tileNum);
+        AIV_WITH_BARRIER(Cast, mbl_outLocal.template ReinterpretCast<float>(), tempLocal0.template ReinterpretCast<int32_t>(), RoundMode::CAST_TRUNC, tileNum);
+        AIV_WITH_BARRIER(ShiftRight, mbl_outLocal, mbl_outLocal, (uint32_t)23, tileNum);
+        AIV_WITH_BARRIER(Adds, mbl_outLocal.template ReinterpretCast<int32_t>(), mbl_outLocal.template ReinterpretCast<int32_t>(), (int32_t)(-127), tileNum);
         // DumpTensor(tempLocal0, 1, 256);
 
         // DumpTensor(cmblLocal, 1, tileNum);
-        AIV_WITH_BARRIER(Add, cmblLocal.template ReinterpretCast<int32_t>(), cmblLocal.template ReinterpretCast<int32_t>(), tempLocal0.template ReinterpretCast<int32_t>(), tileNum);
+        AIV_WITH_BARRIER(Add, cmblLocal.template ReinterpretCast<int32_t>(), cmblLocal.template ReinterpretCast<int32_t>(), mbl_outLocal.template ReinterpretCast<int32_t>(), tileNum);
         // DumpTensor(cmblLocal, 1, tileNum);
 
-        AIV_WITH_BARRIER(ShiftLeft, mbl_outLocal[tileNum / 2], tempLocal0[tileNum / 2], (uint32_t)4, tileNum / 2);
-        AIV_WITH_BARRIER(Or, mbl_outLocal, tempLocal0, mbl_outLocal[tileNum / 2], tileNum / 2 * 2);
+        AIV_WITH_BARRIER(ShiftLeft, mbl_outLocal[tileNum / 2], mbl_outLocal[tileNum / 2], (uint32_t)4, tileNum / 2);
+        AIV_WITH_BARRIER(Or, mbl_outLocal, mbl_outLocal, mbl_outLocal[tileNum / 2], tileNum / 2 * 2);
         AIV_WITH_BARRIER(ShiftLeft, mbl_outLocal[tileNum / 4], mbl_outLocal[tileNum / 4], (uint32_t)8, tileNum / 4);
         AIV_WITH_BARRIER(Or, mbl_outLocal, mbl_outLocal, mbl_outLocal[tileNum / 4], tileNum / 4 * 2);
         AIV_WITH_BARRIER(ShiftLeft, mbl_outLocal[tileNum / 8], mbl_outLocal[tileNum / 8], (uint32_t)16, tileNum / 8);
