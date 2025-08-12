@@ -458,14 +458,16 @@ private:
 
         // AIV_WITH_BARRIER(ShiftLeft, e_inLocal, e_inLocal, (uint32_t)2, computeNum);
         // AIV_WITH_BARRIER(Gather, e_inLocal, tableLocal, e_inLocal, (uint32_t)0, (uint32_t)computeNum);
-        AIV_WITH_BARRIER(Cast, e_inLocal.template ReinterpretCast<float>(), e_inLocal.template ReinterpretCast<int32_t>(),RoundMode::CAST_TRUNC, computeNum);
-        AIV_WITH_BARRIER(Duplicate<float>, e_outLocal.template ReinterpretCast<float>(), (float)125.0, computeNum);
-        AIV_WITH_BARRIER(Axpy, e_outLocal.template ReinterpretCast<float>(), e_inLocal.template ReinterpretCast<float>(), (float)-1.0, computeNum);
-        AIV_WITH_BARRIER(DataCopy, e_inLocal, e_outLocal, computeNum);
-        AIV_WITH_BARRIER(Cast, e_inLocal.template ReinterpretCast<int32_t>(), e_inLocal.template ReinterpretCast<float>(),RoundMode::CAST_TRUNC, computeNum);
+        AIV_WITH_BARRIER(Adds, e_inLocal.template ReinterpretCast<int32_t>(), e_inLocal.template ReinterpretCast<int32_t>(), (int32_t)(-125), computeNum);
+        AIV_WITH_BARRIER(Muls, e_inLocal.template ReinterpretCast<int32_t>(), e_inLocal.template ReinterpretCast<int32_t>(), (int32_t)(-1), computeNum);
+
+        // AIV_WITH_BARRIER(Cast, e_inLocal.template ReinterpretCast<float>(), e_inLocal.template ReinterpretCast<int32_t>(),RoundMode::CAST_TRUNC, computeNum);
+        // AIV_WITH_BARRIER(Duplicate<float>, e_outLocal.template ReinterpretCast<float>(), (float)125.0, computeNum);
+        // AIV_WITH_BARRIER(Axpy, e_outLocal.template ReinterpretCast<float>(), e_inLocal.template ReinterpretCast<float>(), (float)-1.0, computeNum);
+        // AIV_WITH_BARRIER(Cast, e_inLocal.template ReinterpretCast<int32_t>(), e_outLocal.template ReinterpretCast<float>(),RoundMode::CAST_TRUNC, computeNum);
 
         // if( i == 0 ){
-        //     DumpTensor(e_outLocal, 1, tileNum);
+        //     DumpTensor(e_inLocal, 1, tileNum);
         // }
 
         if(tileLength >= 2)
@@ -483,6 +485,10 @@ private:
         AIV_WITH_BARRIER(Cast, tempLocal0.template ReinterpretCast<float>(), tempLocal0.template ReinterpretCast<int32_t>(), RoundMode::CAST_TRUNC, tileNum);
         AIV_WITH_BARRIER(Log2, tempLocal0.template ReinterpretCast<float>(), tempLocal0.template ReinterpretCast<float>(), tileNum);
         AIV_WITH_BARRIER(Cast, tempLocal0.template ReinterpretCast<int32_t>(), tempLocal0.template ReinterpretCast<float>(), RoundMode::CAST_CEIL, tileNum);
+
+        // AIV_WITH_BARRIER(Cast, tempLocal0.template ReinterpretCast<float>(), tempLocal0.template ReinterpretCast<int32_t>(), RoundMode::CAST_TRUNC, tileNum);
+        // AIV_WITH_BARRIER(ShiftRight, tempLocal0, tempLocal0, (uint32_t)23, tileNum);
+        // AIV_WITH_BARRIER(Adds, tempLocal0.template ReinterpretCast<int32_t>(), tempLocal0.template ReinterpretCast<int32_t>(), (int32_t)(-127), tileNum);
         // if(i == 0){
         //     DumpTensor(cmblLocal, 1, tileNum);
         // }
@@ -518,15 +524,15 @@ private:
         AIV_WITH_BARRIER(Mul, mergeLocal.template ReinterpretCast<int32_t>(), mergeLocal.template ReinterpretCast<int32_t>(), tempLocal0.template ReinterpretCast<int32_t>(), (int32_t)computeNum);
         AIV_WITH_BARRIER(Or, mergeLocal, mergeLocal, e_inLocal, (int32_t)computeNum * 2);
 
-        AIV_WITH_BARRIER(GatherMask, e_outLocal.template ReinterpretCast<float>(), mergeLocal.template ReinterpretCast<float>(),
-                   compareMask.template ReinterpretCast<uint32_t>(), true, computeNum, {1, 1, 1, 0}, compressedSize);
+        AIV_WITH_BARRIER(GatherMask, e_outLocal.template ReinterpretCast<half>(), mergeLocal.template ReinterpretCast<half>(),
+                   compareMask.template ReinterpretCast<uint16_t>(), true, computeNum, {1, 1, 1, 0}, compressedSize);
         // if(i == 0){
         //     DumpTensor(compareMask, 1, computeNum / 8 / sizeof(T));
         // }
         // assert(compressedSize % 16 == 0); // Ensure compressedSize is a multiple of 16
-        AIV_WITH_BARRIER(ShiftLeft, e_outLocal, e_outLocal, (uint32_t)16, compressedSize);
-        AIV_WITH_BARRIER(ShiftRight, e_outLocal, e_outLocal, (uint32_t)16, compressedSize / 2);
-        AIV_WITH_BARRIER(Or, e_outLocal, e_outLocal, e_outLocal[compressedSize / 2], compressedSize / 2 * 2);
+        // AIV_WITH_BARRIER(ShiftLeft, e_outLocal, e_outLocal, (uint32_t)16, compressedSize);
+        // AIV_WITH_BARRIER(ShiftRight, e_outLocal, e_outLocal, (uint32_t)16, compressedSize / 2);
+        // AIV_WITH_BARRIER(Or, e_outLocal, e_outLocal, e_outLocal[compressedSize / 2], compressedSize / 2 * 2);
 
         AIV_WITH_BARRIER(ShiftRight, e_inLocal, mergeLocal, (uint32_t)16, computeNum);
         AIV_WITH_BARRIER(Select, mergeLocal.template ReinterpretCast<float>(), compareMask, e_inLocal.template ReinterpretCast<float>(),
